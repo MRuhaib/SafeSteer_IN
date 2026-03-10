@@ -1,4 +1,4 @@
-# SafeSteer-IN
+# SafeSteer_IN
 
 **Inference-Time Safety Steering for Indic LLMs using Contrastive Activation Addition (CAA)**
 
