@@ -1,0 +1,78 @@
+#!/usr/bin/env python
+"""
+SafeSteer-IN  ·  Step 2: Extract Steering Vectors
+===================================================
+Loads the target LLM and extracts contrastive steering vectors for each
+(language × harm-category) slice of the training set.
+
+Usage:
+    python scripts/02_extract_vectors.py
+    python scripts/02_extract_vectors.py --model openhathi-base --languages hi hi-en
+    python scripts/02_extract_vectors.py --no-probe --languages hi ta
+"""
+
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from steering.extract_vectors import run_full_extraction
+from config import ALPHA_SEARCH_RANGE
+
+
+def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Step 2: Extract steering vectors")
+    parser.add_argument(
+        "--model",
+        type=str,
+        default=None,
+        help="Model key: openhathi-base | airavata | sarvam-1 | sarvam-m",
+    )
+    parser.add_argument(
+        "--languages", nargs="+", default=None, help="Language codes (default: all)"
+    )
+    parser.add_argument(
+        "--categories", nargs="+", default=None, help="Category keys (default: all)"
+    )
+    parser.add_argument(
+        "--split", type=str, default="train", help="Dataset split to use for extraction"
+    )
+    parser.add_argument(
+        "--no-probe",
+        action="store_true",
+        help="Skip the layer-probe study; use all candidate layers",
+    )
+    parser.add_argument(
+        "--probe-k", type=int, default=3, help="Top-k layers to keep from probe"
+    )
+    parser.add_argument("--max-length", type=int, default=512)
+    args = parser.parse_args()
+
+    print("=" * 60)
+    print("  SafeSteer-IN  ·  Step 2: Steering Vector Extraction")
+    print("=" * 60)
+    print(f"  Model:      {args.model or 'default (from config)'}")
+    print(f"  Languages:  {args.languages or 'all'}")
+    print(f"  Categories: {args.categories or 'all'}")
+    print(f"  Probe:      {'disabled' if args.no_probe else f'top-{args.probe_k}'}")
+    print()
+
+    target_layers = run_full_extraction(
+        model_key=args.model,
+        languages=args.languages,
+        categories=args.categories,
+        dataset_split=args.split,
+        probe_first=not args.no_probe,
+        probe_k=args.probe_k,
+        max_length=args.max_length,
+    )
+
+    print(f"\n✓ Extraction complete.  Target layers used: {target_layers}")
+    print(f"  Vectors stored in: {ROOT / 'steering_vectors'}")
+
+
+if __name__ == "__main__":
+    main()
