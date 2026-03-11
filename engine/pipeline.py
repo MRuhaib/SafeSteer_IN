@@ -146,16 +146,31 @@ class SafeSteerPipeline:
 
         # Step 3: Steered generation
         should_steer = always_steer or result.risk_score >= self.risk_threshold
-        if should_steer and self._engine.has_vector(
-            result.detected_language, result.detected_category
-        ):
-            _alpha = alpha or self._engine.get_alpha(
-                result.detected_language, result.detected_category
+        steer_lang = result.detected_language
+        steer_cat = result.detected_category
+        if should_steer and not self._engine.has_vector(steer_lang, steer_cat):
+            # Fall back to the best available vector for this language, then hi
+            available = self._engine.available_slices()
+            fallback = next(
+                (s for s in available if s[0] == steer_lang),
+                next((s for s in available if s[0] == "hi"), None),
             )
+            if fallback:
+                steer_lang, steer_cat = fallback
+                logger.info(
+                    "No vector for %s/%s — falling back to %s/%s",
+                    result.detected_language,
+                    result.detected_category,
+                    steer_lang,
+                    steer_cat,
+                )
+
+        if should_steer and self._engine.has_vector(steer_lang, steer_cat):
+            _alpha = alpha or self._engine.get_alpha(steer_lang, steer_cat)
             result.steered_output = self._engine.generate_steered(
                 prompt,
-                result.detected_language,
-                result.detected_category,
+                steer_lang,
+                steer_cat,
                 alpha=_alpha,
                 max_new_tokens=max_new_tokens,
             )
@@ -165,11 +180,7 @@ class SafeSteerPipeline:
             result.steered_output = result.raw_output
             result.steering_applied = False
             if should_steer:
-                logger.info(
-                    "Steering requested but no vector for %s/%s",
-                    result.detected_language,
-                    result.detected_category,
-                )
+                logger.info("No steering vectors available — showing raw output")
 
         # Step 4: Azure Content Safety scoring
         if self._azure_scorer is not None:

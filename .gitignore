@@ -19,11 +19,10 @@ venv/
 
 # Data & Models (generated)
 data/datasets/
-steering_vectors/
-models/
 evaluation/results/
 logs/
 mlruns/
+models/
 
 # OS
 .DS_Store

@@ -40,10 +40,10 @@ MODEL_CONFIGS = {
         "description": "LLaMA-2 7B fine-tuned for Hindi, English & Hinglish. Best for raw activation probing.",
         "num_layers": 32,
         "hidden_dim": 4096,
-        "target_layers": list(range(12, 22)),   # ~40-65 % depth
+        "target_layers": list(range(12, 22)),  # ~40-65 % depth
         "primary_layer": 16,
         "layer_accessor": "model.layers",
-        "chat_format": None,                    # base/completion model
+        "chat_format": None,  # base/completion model
         "requires_high_vram": False,
         "license": "llama2",
     },
@@ -57,9 +57,9 @@ MODEL_CONFIGS = {
         "target_layers": list(range(12, 22)),
         "primary_layer": 16,
         "layer_accessor": "model.layers",
-        "chat_format": "tulu",                  # <|user|>\n...\n<|assistant|>\n
+        "chat_format": "tulu",  # <|user|>\n...\n<|assistant|>\n
         "requires_high_vram": False,
-        "license": "llama2",                    # gated — requires HF login
+        "license": "llama2",  # gated — requires HF login
     },
     # ── Sarvam-1 (2-3B lightweight base model) ───────────────────────────
     "sarvam-1": {
@@ -68,10 +68,10 @@ MODEL_CONFIGS = {
         "description": "~2B LLaMA-style model. Fastest on CPU/low-VRAM. Non-commercial license.",
         "num_layers": 28,
         "hidden_dim": 2048,
-        "target_layers": list(range(11, 19)),   # 40-65 % of 28 layers
-        "primary_layer": 14,
+        "target_layers": list(range(11, 14)),  # layers actually extracted (11, 12, 13)
+        "primary_layer": 12,
         "layer_accessor": "model.layers",
-        "chat_format": None,                    # completion / base model
+        "chat_format": None,  # completion / base model
         "requires_high_vram": False,
         "license": "sarvam-non-commercial",
     },
@@ -82,23 +82,25 @@ MODEL_CONFIGS = {
         "description": "Mistral-Small-3.1-24B-based multilingual model. Requires ~50 GB VRAM — GPU server only.",
         "num_layers": 40,
         "hidden_dim": 5120,
-        "target_layers": list(range(16, 26)),   # ~40-65 % of 40 layers
+        "target_layers": list(range(16, 26)),  # ~40-65 % of 40 layers
         "primary_layer": 20,
         "layer_accessor": "model.layers",
-        "chat_format": "chatml",                # tokenizer.apply_chat_template()
-        "requires_high_vram": True,             # ~50 GB VRAM needed
+        "chat_format": "chatml",  # tokenizer.apply_chat_template()
+        "requires_high_vram": True,  # ~50 GB VRAM needed
         "license": "apache-2.0",
     },
 }
 
-ACTIVE_MODEL = os.getenv("SAFESTEER_MODEL", "openhathi-base")
+ACTIVE_MODEL = os.getenv("SAFESTEER_MODEL", "sarvam-1")
 
 
 def get_model_config(model_key: str | None = None) -> dict:
     """Return the config dict for *model_key* (defaults to ACTIVE_MODEL)."""
     key = model_key or ACTIVE_MODEL
     if key not in MODEL_CONFIGS:
-        raise ValueError(f"Unknown model key '{key}'. Valid keys: {list(MODEL_CONFIGS)}")
+        raise ValueError(
+            f"Unknown model key '{key}'. Valid keys: {list(MODEL_CONFIGS)}"
+        )
     return MODEL_CONFIGS[key]
 
 

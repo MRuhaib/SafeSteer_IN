@@ -1,0 +1,34 @@
+{
+  "model": "sarvam-1",
+  "language": "hi",
+  "category": "child_safety",
+  "layers": {
+    "11": {
+      "file": "layer11.pt",
+      "norm": 0.99951171875,
+      "shape": [
+        2048
+      ]
+    },
+    "12": {
+      "file": "layer12.pt",
+      "norm": 1.0,
+      "shape": [
+        2048
+      ]
+    },
+    "13": {
+      "file": "layer13.pt",
+      "norm": 1.0,
+      "shape": [
+        2048
+      ]
+    }
+  },
+  "num_pairs": 3,
+  "target_layers": [
+    11,
+    12,
+    13
+  ]
+}

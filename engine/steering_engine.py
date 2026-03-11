@@ -156,9 +156,7 @@ class SteeringEngine:
         out = self.model.generate(
             **inputs,
             max_new_tokens=max_new_tokens,
-            do_sample=True,
-            temperature=temperature,
-            top_p=top_p,
+            do_sample=False,  # greedy — avoids multinomial NaN crash under steering
             pad_token_id=self.tokenizer.eos_token_id,
         )
         return self.tokenizer.decode(

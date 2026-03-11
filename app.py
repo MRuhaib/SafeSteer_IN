@@ -53,7 +53,9 @@ def _get_pipeline(model_key: str | None = None):
         try:
             p.load()
         except Exception as e:
-            logger.warning("Pipeline load issue for '%s' (will retry on call): %s", key, e)
+            logger.warning(
+                "Pipeline load issue for '%s' (will retry on call): %s", key, e
+            )
         _pipelines[key] = p
     return _pipelines[key]
 
@@ -183,8 +185,7 @@ def create_demo() -> gr.Blocks:
 
     # Build model dropdown choices: "key — display_name"
     model_choices = [
-        (f"{v['display_name']}  ({k})", k)
-        for k, v in MODEL_CONFIGS.items()
+        (f"{v['display_name']}  ({k})", k) for k, v in MODEL_CONFIGS.items()
     ]
     default_model_choice = _DEFAULT_MODEL
 
@@ -192,7 +193,9 @@ def create_demo() -> gr.Blocks:
         cfg = MODEL_CONFIGS.get(model_key, {})
         desc = cfg.get("description", "")
         if cfg.get("requires_high_vram"):
-            desc += "  ⚠️ **Requires ~50 GB VRAM — not suitable for CPU or consumer GPUs.**"
+            desc += (
+                "  ⚠️ **Requires ~50 GB VRAM — not suitable for CPU or consumer GPUs.**"
+            )
         return desc
 
     with gr.Blocks(
@@ -322,6 +325,6 @@ if __name__ == "__main__":
     demo = create_demo()
     demo.launch(
         server_port=GRADIO_PORT,
-        share=False,
+        share=True,
         show_error=True,
     )
