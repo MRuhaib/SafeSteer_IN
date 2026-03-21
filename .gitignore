@@ -18,7 +18,6 @@ venv/
 *.swp
 
 # Data & Models (generated)
-data/datasets/
 evaluation/results/
 logs/
 mlruns/
