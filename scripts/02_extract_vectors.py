@@ -46,9 +46,19 @@ def main():
         help="Skip the layer-probe study; use all candidate layers",
     )
     parser.add_argument(
+        "--probe-only",
+        action="store_true",
+        help="Extract only top-k probed layers instead of all configured target layers",
+    )
+    parser.add_argument(
         "--probe-k", type=int, default=3, help="Top-k layers to keep from probe"
     )
     parser.add_argument("--max-length", type=int, default=512)
+    parser.add_argument(
+        "--quantize-4bit",
+        action="store_true",
+        help="Load model in 4-bit quantized mode (bitsandbytes)",
+    )
     args = parser.parse_args()
 
     print("=" * 60)
@@ -58,6 +68,8 @@ def main():
     print(f"  Languages:  {args.languages or 'all'}")
     print(f"  Categories: {args.categories or 'all'}")
     print(f"  Probe:      {'disabled' if args.no_probe else f'top-{args.probe_k}'}")
+    print(f"  Probe only: {args.probe_only}")
+    print(f"  4-bit:      {args.quantize_4bit}")
     print()
 
     target_layers = run_full_extraction(
@@ -66,8 +78,10 @@ def main():
         categories=args.categories,
         dataset_split=args.split,
         probe_first=not args.no_probe,
+        probe_only=args.probe_only,
         probe_k=args.probe_k,
         max_length=args.max_length,
+        quantize=True if args.quantize_4bit else None,
     )
 
     print(f"\n✓ Extraction complete.  Target layers used: {target_layers}")

@@ -7,7 +7,7 @@ Constructs the contrastive-pair dataset from seed templates and
 
 Usage:
     python scripts/01_build_dataset.py
-    python scripts/01_build_dataset.py --no-hf          # skip HF datasets
+    python scripts/01_build_dataset.py --with-hf        # include HF datasets
     python scripts/01_build_dataset.py --no-augment      # skip augmentation
 """
 
@@ -29,7 +29,7 @@ def main():
         "--no-augment", action="store_true", help="Disable paraphrase augmentation"
     )
     parser.add_argument(
-        "--no-hf", action="store_true", help="Skip loading HuggingFace datasets"
+        "--with-hf", action="store_true", help="Include HuggingFace datasets"
     )
     parser.add_argument(
         "--augment-n",
@@ -38,6 +38,12 @@ def main():
         help="Number of augmented variants per seed pair",
     )
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--min-pairs-per-slice",
+        type=int,
+        default=30,
+        help="Minimum synthetic contrastive pairs per (language, category) slice",
+    )
     parser.add_argument("--output-dir", type=str, default=None)
     args = parser.parse_args()
 
@@ -50,8 +56,9 @@ def main():
     splits = build_dataset(
         augment=not args.no_augment,
         augment_n=args.augment_n,
-        load_hf=not args.no_hf,
+        load_hf=args.with_hf,
         seed=args.seed,
+        min_pairs_per_slice=args.min_pairs_per_slice,
         output_dir=out,
     )
 

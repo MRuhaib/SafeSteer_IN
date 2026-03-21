@@ -346,9 +346,11 @@ def run_full_extraction(
     categories: Optional[List[str]] = None,
     dataset_split: str = "train",
     probe_first: bool = True,
+    probe_only: bool = False,
     probe_k: int = 3,
     probe_n_pairs: int = 50,
     max_length: int = 512,
+    quantize: Optional[bool] = None,
 ):
     """
     Run extraction across all requested (language × category) slices.
@@ -366,7 +368,7 @@ def run_full_extraction(
     _languages = languages or list(LANGUAGES.keys())
     _categories = categories or CATEGORY_KEYS
 
-    model, tokenizer = load_model_and_tokenizer(_model_key)
+    model, tokenizer = load_model_and_tokenizer(_model_key, quantize=quantize)
     accessor = cfg["layer_accessor"]
     candidate_layers = cfg["target_layers"]
 
@@ -392,6 +394,14 @@ def run_full_extraction(
         else:
             logger.warning("Not enough pairs for probing; using all candidate layers")
             target_layers = candidate_layers
+
+    if not probe_only:
+        # Save vectors from every configured target layer for downstream analysis.
+        target_layers = list(candidate_layers)
+
+    primary_layer = cfg.get("primary_layer")
+    if primary_layer is not None and primary_layer not in target_layers:
+        target_layers = list(target_layers) + [primary_layer]
 
     # Extract per slice
     t0 = time.time()

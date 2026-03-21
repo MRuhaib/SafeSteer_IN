@@ -40,6 +40,7 @@ from config import (
 )
 from data.taxonomy import TAXONOMY, CATEGORY_KEYS
 from data.templates import ALL_TEMPLATES
+from data.synthetic_generation import generate_slice_pairs
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(
@@ -68,6 +69,42 @@ def load_seed_templates() -> List[dict]:
                     }
                 )
     logger.info("Loaded %d seed template pairs", len(pairs))
+    return pairs
+
+
+def build_synthetic_pairs(min_pairs_per_slice: int = 30, seed: int = 42) -> List[dict]:
+    """Generate synthetic-only contrastive pairs for each (language, category) slice."""
+    pairs: List[dict] = []
+    for lang in LANGUAGES.keys():
+        lang_templates = ALL_TEMPLATES.get(lang, {})
+        for category in CATEGORY_KEYS:
+            seed_items = []
+            for item in lang_templates.get(category, []):
+                seed_items.append(
+                    {
+                        "prompt": item["prompt"],
+                        "safe_response": item["safe"],
+                        "unsafe_response": item["unsafe"],
+                        "language": lang,
+                        "category": category,
+                        "source": "seed_template",
+                    }
+                )
+
+            generated = generate_slice_pairs(
+                lang=lang,
+                category=category,
+                seed_pairs=seed_items,
+                min_pairs=min_pairs_per_slice,
+                seed=seed,
+            )
+            pairs.extend(generated)
+
+    logger.info(
+        "Built %d synthetic pairs (%d per language/category slice)",
+        len(pairs),
+        min_pairs_per_slice,
+    )
     return pairs
 
 
@@ -463,8 +500,9 @@ def augment_pair(pair: dict, n: int = 3) -> List[dict]:
 def build_dataset(
     augment: bool = True,
     augment_n: int = 2,
-    load_hf: bool = True,
+    load_hf: bool = False,
     seed: int = 42,
+    min_pairs_per_slice: int = 30,
     output_dir: Optional[Path] = None,
 ) -> Dict[str, List[dict]]:
     """
@@ -480,8 +518,10 @@ def build_dataset(
     # ── Collect from all sources ─────────────────────────────────────────
     all_pairs: List[dict] = []
 
-    # Source 1: seed templates
-    all_pairs.extend(load_seed_templates())
+    # Source 1: synthetic pairs expanded from seed templates
+    all_pairs.extend(
+        build_synthetic_pairs(min_pairs_per_slice=min_pairs_per_slice, seed=seed)
+    )
 
     # Source 2: HuggingFace (optional, graceful fallback)
     if load_hf:

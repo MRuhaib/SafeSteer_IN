@@ -124,7 +124,7 @@ def format_prompt(prompt: str, model_key: str | None = None) -> str:
 INDICBERT_MODEL_ID = "ai4bharat/IndicBERTv2-MLM-only"
 CLASSIFIER_CHECKPOINT = MODELS_DIR / "indic_risk_classifier"
 CLASSIFIER_NUM_CATEGORIES = 8
-CLASSIFIER_NUM_LANGUAGES = 6
+CLASSIFIER_NUM_LANGUAGES = 9
 
 # ─── Languages & Harm Categories ────────────────────────────────────────────
 LANGUAGES = {
@@ -134,6 +134,9 @@ LANGUAGES = {
     "gu": "Gujarati",
     "mr": "Marathi",
     "hi-en": "Hinglish",
+    "te": "Telugu",
+    "kn": "Kannada",
+    "ml": "Malayalam",
 }
 
 HARM_CATEGORIES = {
@@ -156,13 +159,16 @@ PAIRS_PER_CATEGORY = {
     "gu": 100,
     "mr": 100,
     "hi-en": 200,
+    "te": 120,
+    "kn": 120,
+    "ml": 120,
 }
 
 DATASET_SPLIT_RATIOS = {"train": 0.8, "val": 0.1, "test": 0.1}
 
 # ─── Steering Defaults ──────────────────────────────────────────────────────
 DEFAULT_ALPHA = 15.0
-ALPHA_SEARCH_RANGE = [5.0, 10.0, 15.0, 20.0, 25.0]
+ALPHA_SEARCH_RANGE = [5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]
 MAX_PERPLEXITY_INCREASE = 0.20  # 20 %
 
 # ─── Quantization (BitsAndBytes 4-bit) ──────────────────────────────────────

@@ -22,7 +22,7 @@ data/datasets/
 evaluation/results/
 logs/
 mlruns/
-models/
+
 
 # OS
 .DS_Store
