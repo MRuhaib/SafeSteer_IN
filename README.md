@@ -1,267 +1,204 @@
-# SafeSteer_IN
+# SafeSteer-IN
 
-**Inference-Time Safety Steering for Indic LLMs using Contrastive Activation Addition (CAA)**
+Inference-time safety steering for Indic LLMs using Contrastive Activation Addition (CAA).
 
-> *Because Viksit Bharat's AI must be safe in every language it speaks.*
+## What this project does
 
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
+SafeSteer-IN adds a plug-in safety layer at inference time:
 
----
+1. Build contrastive safe/unsafe data for India-specific harms.
+2. Extract steering vectors per `(language, category, layer)` from a target LLM.
+3. Route user prompts by language/category via an IndicBERT classifier.
+4. Apply activation steering in the model forward pass without weight updates.
+5. Export steered outputs and latency for external judging (e.g., Claude Sonnet).
 
-## Overview
+No model fine-tuning is required for the target LLM.
 
-India has **600M+ active regional-language internet users**, yet Indic LLMs (Sarvam-1, OpenHathi, Navarasa) have **zero dedicated safety tooling**. English-trained safety filters miss India-specific harms entirely: communal hate, caste discrimination, code-mixed toxicity, regional political misinformation, and more.
+## Current workflow (submission mode)
 
-**SafeSteer-IN** applies **Contrastive Activation Addition (CAA)** to steer Indic LLMs toward safe behaviour at inference time — with **zero weight updates**, **under 3ms latency overhead**, and **full auditability**.
+The repository is currently optimized for:
 
-### How It Works
+- Synthetic contrastive data generation (seed templates + optional Claude API augmentation)
+- Steering vector extraction for multi-language, multi-category slices
+- External test prompt ingestion from CSV/XLSX files
+- Steered-output export for LLM-as-a-judge scoring
+- Layer sensitivity and vector similarity analysis scripts
 
-```
-User Prompt → IndicBERT Classifier → Vector Selector → Hooked LLM → Safe Output
-              (language + category)    (steering vec)   (residual    
-                                                         stream       
-                                                         intervention)
-```
+## Supported models
 
-1. **Classify** the prompt's language and harm category (IndicBERT, <10ms)
-2. **Select** the pre-computed steering vector for that (language, category)
-3. **Hook** into the model's residual stream at the target layer
-4. **Subtract** the scaled unsafe direction: `hidden -= α × steering_vector`
-5. **Generate** a safe response — the model's weights are never modified
+- `sarvam-1` (default)
+- `openhathi-base`
+- `airavata`
+- `sarvam-m` (high VRAM)
 
----
+## Supported languages
 
-## India Safety Taxonomy (8 Categories)
+- `hi`, `ta`, `bn`, `gu`, `mr`, `hi-en`, `te`, `kn`, `ml`
 
-| # | Category | Description |
-|---|----------|-------------|
-| 0 | Communal & Religious Hate | Anti-community incitement, riot glorification |
-| 1 | Caste-Based Discrimination | Caste slurs, Dalit dehumanisation, untouchability |
-| 2 | Regional Political Misinfo | Fake politician quotes, EVM conspiracy, election fraud |
-| 3 | Gender-Based Violence | Vernacular rape threats, honour-killing justification |
-| 4 | Code-Mixed Toxicity | Hinglish/Tanglish hate designed to evade English filters |
-| 5 | Anti-Minority Sentiment | Anti-NE, anti-tribal, anti-LGBTQ+ in Indian context |
-| 6 | Child Safety | Child-marriage justification, POCSO evasion |
-| 7 | Financial Scam Facilitation | UPI fraud, KYC phishing in regional languages |
+## Harm categories
 
-**Languages:** Hindi, Tamil, Bengali, Gujarati, Marathi, Hinglish (code-mixed)
+- `communal_religious_hate`
+- `caste_discrimination`
+- `political_misinformation`
+- `gender_based_violence`
+- `code_mixed_toxicity`
+- `anti_minority_sentiment`
+- `child_safety`
+- `financial_scam`
 
----
+## Repository layout
 
-## Project Structure
+- `config.py`: global config, model/language/category settings
+- `data/`: taxonomy, templates, synthetic generation, dataset builders
+- `steering/`: vector extraction, hooks, alpha calibration
+- `classifier/`: IndicBERT training + inference
+- `engine/`: steering engine + end-to-end runtime pipeline
+- `evaluation/`: metrics + evaluation runners + exports
+- `scripts/01..08`: runnable pipeline and analysis entry points
+- `steering_vectors/`: extracted vector artifacts
+- `evaluation/results/`: output metrics and export files
 
-```
-SafeSteer-IN/
-├── config.py                      # Central configuration
-├── requirements.txt               # Python dependencies
-├── .env.example                   # Environment variable template
-│
-├── data/                          # Dataset module
-│   ├── taxonomy.py                # 8 harm categories with metadata
-│   ├── templates.py               # Seed contrastive pairs (6 languages)
-│   └── build_dataset.py           # Dataset construction pipeline
-│
-├── steering/                      # Steering vector module
-│   ├── hooks.py                   # PyTorch forward-hook utilities
-│   ├── extract_vectors.py         # Vector extraction pipeline
-│   └── calibrate_alpha.py         # Alpha calibration sweep
-│
-├── classifier/                    # Risk classifier module
-│   ├── train_classifier.py        # IndicBERT fine-tuning
-│   └── inference.py               # Inference + rule-based fallback
-│
-├── engine/                        # Inference engine
-│   ├── steering_engine.py         # Core steering engine
-│   └── pipeline.py                # Full end-to-end pipeline
-│
-├── evaluation/                    # Evaluation module
-│   ├── metrics.py                 # SIR, FPR, fluency, latency
-│   ├── azure_safety.py            # Azure Content Safety wrapper
-│   └── evaluate.py                # Full evaluation pipeline
-│
-├── azure_ml/                      # Azure ML integration
-│   ├── setup.py                   # Workspace + compute setup
-│   └── tracking.py                # MLflow experiment tracking
-│
-├── app.py                         # Gradio demo UI
-├── api.py                         # FastAPI REST server
-│
-└── scripts/                       # Step-by-step runner scripts
-    ├── 01_build_dataset.py
-    ├── 02_extract_vectors.py
-    ├── 03_train_classifier.py
-    ├── 04_calibrate_alpha.py
-    ├── 05_evaluate.py
-    └── 06_launch_demo.py
-```
-
----
-
-## Quick Start
-
-### 1. Environment Setup
+## Environment setup
 
 ```bash
-# Create conda environment
-conda create -n safesteer python=3.11 -y
-conda activate safesteer
-
-# Install PyTorch (CUDA 12.1 — adjust for your GPU)
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-
-# Install all dependencies
+python -m venv venv
+venv\Scripts\activate
+pip install -U pip
 pip install -r requirements.txt
+pip install sentencepiece openpyxl
 ```
 
-### 2. Configure Environment
+Optional for synthetic generation via Claude API:
 
 ```bash
-# Copy and fill in your credentials
-cp .env.example .env
-# Edit .env with your HuggingFace token and Azure credentials
+pip install anthropic
 ```
 
-### 3. Run the Pipeline (6 Steps)
+Set environment variables as needed:
+
+- `HF_TOKEN=<YOUR_HF_TOKEN>`
+
+## Step-by-step commands
+
+### 1) Build synthetic dataset
 
 ```bash
-# Step 1: Build the contrastive-pair dataset
-python scripts/01_build_dataset.py
-
-# Step 2: Extract steering vectors (requires GPU)
-python scripts/02_extract_vectors.py --languages hi hi-en
-
-# Step 3: Train the IndicBERT risk classifier
-python scripts/03_train_classifier.py
-
-# Step 4: Calibrate alpha values
-python scripts/04_calibrate_alpha.py
-
-# Step 5: Run evaluation
-python scripts/05_evaluate.py
-
-# Step 6: Launch the demo
-python scripts/06_launch_demo.py
+python scripts/01_build_dataset.py --no-augment --min-pairs-per-slice 30
 ```
 
----
+Notes:
+- HF dataset ingestion is disabled by default in the current setup.
+- If no Claude key is set, fallback synthetic expansion is used.
 
-## Azure Integration (Required for Hackathon)
-
-### Azure Student Pack Setup
-
-1. **Azure ML Workspace:**
-   - Go to [Azure Portal](https://portal.azure.com)
-   - Create Machine Learning workspace: `safesteer-in-ws`
-   - Resource group: `safesteer-rg`
-   - Run: `python -m azure_ml.setup`
-
-2. **Azure AI Content Safety:**
-   - Create an Azure AI Content Safety resource
-   - Copy endpoint and key to `.env`
-
-3. **Set environment variables in `.env`:**
-   ```
-   AZURE_CONTENT_SAFETY_ENDPOINT=https://your-resource.cognitiveservices.azure.com/
-   AZURE_CONTENT_SAFETY_KEY=your-key-here
-   AZURE_ML_SUBSCRIPTION_ID=your-subscription-id
-   ```
-
-### Azure Services Used
-
-| Service | Purpose |
-|---------|---------|
-| Azure ML Workspace | Experiment tracking, model registry, artifact store |
-| Azure AI Content Safety | Independent safety-score baseline for evaluation |
-| Azure Compute (optional) | GPU cluster for parallel vector extraction |
-
----
-
-## Supported Models
-
-| Model | HuggingFace ID | Priority |
-|-------|---------------|----------|
-| OpenHathi | `sarvamai/OpenHathi-7B-Hi-v0.1` | Primary |
-| Sarvam-1 | `sarvamai/sarvam-1` | Secondary |
-| Navarasa 2.0 | `Telugu-LLM-Labs/Navarasa-2.0` | South Indian |
-
-All models load with **4-bit quantisation** (bitsandbytes NF4) to fit in 16GB GPU memory.
-
-To switch models, set `SAFESTEER_MODEL=sarvam-1` in `.env`.
-
----
-
-## Key Metrics
-
-| Metric | Description | Target |
-|--------|-------------|--------|
-| SIR | Safety Improvement Rate | > 70% |
-| FPR | False Positive Rate (benign prompts incorrectly steered) | < 10% |
-| Fluency | Perplexity preservation on benign inputs | > 0.85 |
-| Latency | Additional inference time from steering hook | < 3ms |
-
----
-
-## API Usage
-
-### FastAPI Server
+### 2) Extract steering vectors (Sarvam-1)
 
 ```bash
-# Start the API
-python api.py
-# Or: uvicorn api:app --host 0.0.0.0 --port 8000
+python scripts/02_extract_vectors.py \
+  --model sarvam-1 \
+  --languages hi ta bn gu mr hi-en te kn ml \
+  --categories communal_religious_hate caste_discrimination political_misinformation gender_based_violence code_mixed_toxicity anti_minority_sentiment child_safety financial_scam \
+  --no-probe
 ```
 
-```python
-import requests
-
-response = requests.post("http://localhost:8000/steer", json={
-    "prompt": "भारत में मुसलमानों के बारे में क्या सच है?",
-    "language": "hi",
-    "always_steer": True,
-    "alpha": 15.0,
-})
-
-result = response.json()
-print("Raw:", result["raw_output"])
-print("Steered:", result["steered_output"])
-```
-
-### Gradio Demo
+### 3) Extract steering vectors (OpenHathi 4-bit)
 
 ```bash
-python app.py
-# Open http://localhost:7860
+python scripts/02_extract_vectors.py \
+  --model openhathi-base \
+  --quantize-4bit \
+  --languages hi ta bn gu mr hi-en te kn ml \
+  --categories communal_religious_hate caste_discrimination political_misinformation gender_based_violence code_mixed_toxicity anti_minority_sentiment child_safety financial_scam \
+  --no-probe
 ```
 
----
+### 4) Export steered outputs from external test files
 
-## Compute-Constrained Fallbacks
+```bash
+python scripts/05_evaluate.py \
+  --model sarvam-1 \
+  --test-dir data/datasets/test \
+  --steered-only \
+  --max-prompts 200 \
+  --max-tokens 128
+```
 
-If you don't have GPU access:
+Repeat with `--model openhathi-base`.
 
-1. **Use CPU with quantisation:** Set `USE_4BIT = True` in config (default). Slower but works.
-2. **Reduce dataset:** Run with `--languages hi hi-en` only (2 languages instead of 6).
-3. **Skip probe:** Use `--no-probe` to extract from all candidate layers without the probe study.
-4. **Fewer pairs:** Edit `PAIRS_PER_CATEGORY` in config to reduce to 50 per category.
+Output location:
 
----
+- `evaluation/results/steered_exports/<model>/all_categories_steered.csv`
+- `evaluation/results/steered_exports/<model>/all_categories_steered.json`
+- category-wise CSV files
 
-## References
+### 5) Layer sensitivity
 
-- Panickssery et al. (2024) — *Steering LLM activations: Refusal is mediated by a single direction*
-- Zou et al. (2023) — *Representation Engineering: A top-down approach to AI transparency*
-- Wang et al. (2025) — *Cross-Lingual Activation Steering (CLAS)*
-- AI4Bharat (2024) — *IndicLLMSuite*
-- Soteria (EMNLP 2025) — *Language-specific functional parameter steering for safety*
+```bash
+python scripts/07_layer_sensitivity.py \
+  --model sarvam-1 \
+  --languages hi ta bn gu mr hi-en te kn ml \
+  --categories communal_religious_hate caste_discrimination political_misinformation gender_based_violence code_mixed_toxicity anti_minority_sentiment child_safety financial_scam \
+  --alphas 5 10 15 20 25 30 35 40 \
+  --split test \
+  --max-prompts 20 \
+  --max-tokens 96 \
+  --output-csv evaluation/results/layer_sensitivity_sarvam1.csv
+```
 
----
+### 6) Cosine + CKA vector similarity
 
-## License
+```bash
+python scripts/08_vector_similarity.py \
+  --model sarvam-1 \
+  --languages hi ta bn gu mr hi-en te kn ml \
+  --categories communal_religious_hate caste_discrimination political_misinformation gender_based_violence code_mixed_toxicity anti_minority_sentiment child_safety financial_scam \
+  --layer 12 \
+  --output-dir evaluation/results/similarity/sarvam1
+```
 
-Apache 2.0 — Steering vectors and India Safety Dataset released under CC BY 4.0.
+## External test data format
 
----
+CSV/XLSX expected columns:
 
-**SafeSteer-IN** · Microsoft AI Unlocked · Track 5: Trustworthy AI  
-Team Vishal Megamart Security Guards · IIT Madras
+- `prompt_id`
+- `language`
+- `category`
+- `prompt_text`
+
+The evaluator also handles Excel sheets where the first row contains these headers but pandas auto-reads columns as `Column1...Column4`.
+
+## Artifact semantics
+
+### `layerN.pt` files
+
+Each `layerN.pt` stores a steering vector tensor for one specific:
+
+- model
+- language
+- category
+- layer
+
+Conceptually, this is the normalized unsafe-safe direction used by the forward hook.
+
+### `metadata.json`
+
+Stored alongside vectors and includes:
+
+- model/language/category
+- saved layers
+- vector norms/shapes
+- extraction metadata
+
+## Git LFS
+
+Large files are tracked with LFS in `.gitattributes`:
+
+- `*.pt`, `*.bin`, `*.safetensors`
+- steering vector layer files
+- classifier checkpoint artifacts
+
+Initialize LFS before pushing artifacts:
+
+```bash
+git lfs install
+git add .gitattributes
+```

@@ -40,7 +40,7 @@ MODEL_CONFIGS = {
         "description": "LLaMA-2 7B fine-tuned for Hindi, English & Hinglish. Best for raw activation probing.",
         "num_layers": 32,
         "hidden_dim": 4096,
-        "target_layers": list(range(12, 22)),  # ~40-65 % depth
+        "target_layers": list(range(10, 23, 2)),  # middle-depth sweep (every 2 layers)
         "primary_layer": 16,
         "layer_accessor": "model.layers",
         "chat_format": None,  # base/completion model
@@ -68,7 +68,7 @@ MODEL_CONFIGS = {
         "description": "~2B LLaMA-style model. Fastest on CPU/low-VRAM. Non-commercial license.",
         "num_layers": 28,
         "hidden_dim": 2048,
-        "target_layers": list(range(11, 14)),  # layers actually extracted (11, 12, 13)
+        "target_layers": list(range(8, 19, 2)),  # middle-depth sweep (every 2 layers)
         "primary_layer": 12,
         "layer_accessor": "model.layers",
         "chat_format": None,  # completion / base model
