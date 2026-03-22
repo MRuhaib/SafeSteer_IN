@@ -333,17 +333,66 @@ def run_steered_export_from_files(
     languages: List[str],
     categories: List[str],
 ):
-    """Run steered generation over external prompt files and export per-category CSV/JSON."""
-    prompt_slices = _load_prompt_files(test_dir, languages, categories, max_prompts)
+    """Run steered generation over external prompt files with incremental per-file exports."""
     export_root = output_dir / "steered_exports" / model_key
     export_root.mkdir(parents=True, exist_ok=True)
+    file_export_root = export_root / "by_test_file"
+    file_export_root.mkdir(parents=True, exist_ok=True)
+
+    test_files = sorted(
+        [p for p in test_dir.iterdir() if p.suffix.lower() in {".csv", ".xlsx", ".xls"}]
+    )
+    logger.info("Found %d external test files in %s", len(test_files), test_dir)
 
     all_rows: List[dict] = []
-    for key, rows in prompt_slices.items():
-        lang, cat = key.split("/", 1)
-        cat_rows: List[dict] = []
-        for r in tqdm(rows, desc=f"steered {key}", leave=False):
+    total_samples = 0
+    total_steering_applied = 0
+
+    for file_idx, file_path in enumerate(test_files, start=1):
+        rows = _read_prompt_file(file_path)
+        rows = [
+            r
+            for r in rows
+            if (not languages or r["language"] in languages)
+            and (not categories or r["category"] in categories)
+        ]
+
+        # Cap prompts per slice within this file.
+        by_slice: Dict[str, List[dict]] = {}
+        for r in rows:
+            key = f"{r['language']}/{r['category']}"
+            by_slice.setdefault(key, []).append(r)
+        capped_rows: List[dict] = []
+        for _, slice_rows in by_slice.items():
+            capped_rows.extend(slice_rows[:max_prompts])
+
+        if not capped_rows:
+            logger.info(
+                "[%d/%d] %s: no matching prompts after filters",
+                file_idx,
+                len(test_files),
+                file_path.name,
+            )
+            continue
+
+        logger.info(
+            "[%d/%d] Processing %s (%d prompts)",
+            file_idx,
+            len(test_files),
+            file_path.name,
+            len(capped_rows),
+        )
+
+        file_rows: List[dict] = []
+        file_steered = 0
+
+        for sample_idx, r in enumerate(
+            tqdm(capped_rows, desc=f"steered {file_path.name}", leave=False), start=1
+        ):
+            lang = r["language"]
+            cat = r["category"]
             prompt = r["prompt_text"]
+
             t0 = time.time()
             if engine.has_vector(lang, cat):
                 out = engine.generate_steered(
@@ -353,11 +402,15 @@ def run_steered_export_from_files(
                     max_new_tokens=max_new_tokens,
                 )
                 steering_applied = True
+                file_steered += 1
+                total_steering_applied += 1
             else:
                 out = engine.generate(prompt, max_new_tokens=max_new_tokens)
                 steering_applied = False
+
             latency = (time.time() - t0) * 1000
             row = {
+                "source_file": file_path.name,
                 "prompt_id": r["prompt_id"],
                 "language": lang,
                 "category": cat,
@@ -367,18 +420,34 @@ def run_steered_export_from_files(
                 "steering_applied": steering_applied,
                 "model": model_key,
             }
-            cat_rows.append(row)
+            file_rows.append(row)
             all_rows.append(row)
+            total_samples += 1
 
-        if cat_rows:
-            cat_csv = export_root / f"{cat}.csv"
-            with open(cat_csv, "w", newline="", encoding="utf-8") as f:
-                writer = csv.DictWriter(f, fieldnames=cat_rows[0].keys())
-                writer.writeheader()
-                writer.writerows(cat_rows)
+            if sample_idx % 20 == 0 or sample_idx == len(capped_rows):
+                logger.info(
+                    "[%s] samples %d/%d | file_steered=%d | total_samples=%d total_steered=%d",
+                    file_path.name,
+                    sample_idx,
+                    len(capped_rows),
+                    file_steered,
+                    total_samples,
+                    total_steering_applied,
+                )
 
-    # Combined outputs
-    if all_rows:
+        # Save per-file outputs immediately.
+        stem = file_path.stem
+        file_csv = file_export_root / f"{stem}_steered.csv"
+        with open(file_csv, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=file_rows[0].keys())
+            writer.writeheader()
+            writer.writerows(file_rows)
+
+        file_json = file_export_root / f"{stem}_steered.json"
+        with open(file_json, "w", encoding="utf-8") as f:
+            json.dump(file_rows, f, ensure_ascii=False, indent=2)
+
+        # Update combined outputs after every file.
         combined_csv = export_root / "all_categories_steered.csv"
         with open(combined_csv, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=all_rows[0].keys())
@@ -388,6 +457,24 @@ def run_steered_export_from_files(
         combined_json = export_root / "all_categories_steered.json"
         with open(combined_json, "w", encoding="utf-8") as f:
             json.dump(all_rows, f, ensure_ascii=False, indent=2)
+
+        logger.info(
+            "Saved %s (%d rows). Running total: %d rows",
+            file_path.name,
+            len(file_rows),
+            len(all_rows),
+        )
+
+    # Keep category CSV compatibility output.
+    by_category: Dict[str, List[dict]] = {}
+    for row in all_rows:
+        by_category.setdefault(row["category"], []).append(row)
+    for cat, cat_rows in by_category.items():
+        cat_csv = export_root / f"{cat}.csv"
+        with open(cat_csv, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=cat_rows[0].keys())
+            writer.writeheader()
+            writer.writerows(cat_rows)
 
     logger.info("Steered export written to %s", export_root)
     return all_rows

@@ -404,14 +404,38 @@ def run_full_extraction(
         target_layers = list(target_layers) + [primary_layer]
 
     # Extract per slice
+    total_slices = len(_languages) * len(_categories)
+    completed_slices = 0
+    extracted_slices = 0
+    skipped_slices = 0
+    total_pairs_processed = 0
+    total_vectors_saved = 0
+
+    logger.info(
+        "Starting extraction for %d slices (%d languages x %d categories)",
+        total_slices,
+        len(_languages),
+        len(_categories),
+    )
     t0 = time.time()
     for lang in _languages:
         for cat in _categories:
+            completed_slices += 1
             pairs = load_pairs_for_extraction(
                 dataset_split, language=lang, category=cat
             )
             if len(pairs) < 3:
+                skipped_slices += 1
                 logger.warning("Skipping %s/%s — only %d pairs", lang, cat, len(pairs))
+                logger.info(
+                    "Progress: %d/%d slices | extracted=%d skipped=%d | pairs=%d vectors=%d",
+                    completed_slices,
+                    total_slices,
+                    extracted_slices,
+                    skipped_slices,
+                    total_pairs_processed,
+                    total_vectors_saved,
+                )
                 continue
 
             logger.info(
@@ -432,9 +456,28 @@ def run_full_extraction(
                 cat,
                 extra_meta={"num_pairs": len(pairs), "target_layers": target_layers},
             )
+            extracted_slices += 1
+            total_pairs_processed += len(pairs)
+            total_vectors_saved += len(vectors)
+            logger.info(
+                "Progress: %d/%d slices | extracted=%d skipped=%d | pairs=%d vectors=%d",
+                completed_slices,
+                total_slices,
+                extracted_slices,
+                skipped_slices,
+                total_pairs_processed,
+                total_vectors_saved,
+            )
 
     elapsed = time.time() - t0
-    logger.info("Full extraction finished in %.1f s", elapsed)
+    logger.info(
+        "Full extraction finished in %.1f s | extracted=%d skipped=%d | pairs=%d vectors=%d",
+        elapsed,
+        extracted_slices,
+        skipped_slices,
+        total_pairs_processed,
+        total_vectors_saved,
+    )
     return target_layers
 
 
