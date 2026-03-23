@@ -48,6 +48,24 @@ def main():
         action="store_true",
         help="Only export steered responses + latency (no baseline metrics)",
     )
+    parser.add_argument(
+        "--alpha-sweep",
+        nargs="+",
+        type=float,
+        default=None,
+        help="Sweep these alpha values during steered export",
+    )
+    parser.add_argument(
+        "--multi-layer",
+        action="store_true",
+        help="Apply steering at multiple layers for each slice",
+    )
+    parser.add_argument(
+        "--multi-layer-top-k",
+        type=int,
+        default=3,
+        help="Top-k layers to use when --multi-layer is enabled",
+    )
     args = parser.parse_args()
 
     print("=" * 60)
@@ -58,6 +76,10 @@ def main():
     if args.test_dir:
         print(f"  External test dir: {args.test_dir}")
     print(f"  Steered-only mode: {'enabled' if args.steered_only else 'disabled'}")
+    if args.alpha_sweep:
+        print(f"  Alpha sweep: {args.alpha_sweep}")
+    print(f"  Multi-layer steering: {'enabled' if args.multi_layer else 'disabled'}")
+    print(f"  Multi-layer top-k: {args.multi_layer_top_k}")
     print()
 
     results = run_evaluation(
@@ -69,6 +91,9 @@ def main():
         max_new_tokens=args.max_tokens,
         test_dir=Path(args.test_dir) if args.test_dir else None,
         steered_only=args.steered_only,
+        alpha_sweep=args.alpha_sweep,
+        use_multilayer=args.multi_layer,
+        multilayer_top_k=args.multi_layer_top_k,
     )
 
     print(f"\n✓ Evaluation complete — {len(results)} slices evaluated.")

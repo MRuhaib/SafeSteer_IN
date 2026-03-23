@@ -127,6 +127,13 @@ class SteeringEngine:
     def has_vector(self, language: str, category: str) -> bool:
         return self.get_vector(language, category) is not None
 
+    def has_any_vector(self, language: str, category: str) -> bool:
+        return bool(self.vectors.get(language, {}).get(category, {}))
+
+    def get_available_layers(self, language: str, category: str) -> List[int]:
+        layer_map = self.vectors.get(language, {}).get(category, {})
+        return sorted(layer_map.keys())
+
     def available_slices(self) -> List[Tuple[str, str]]:
         """Return list of (language, category) pairs that have vectors."""
         slices = []
@@ -192,6 +199,57 @@ class SteeringEngine:
             _layer,
             vec,
             _alpha,
+            self.layer_accessor,
+        )
+        try:
+            result = self.generate(prompt, max_new_tokens, temperature, top_p)
+        finally:
+            hook.remove()
+        return result
+
+    @torch.no_grad()
+    def generate_steered_multilayer(
+        self,
+        prompt: str,
+        language: str,
+        category: str,
+        alpha: Optional[float] = None,
+        layers: Optional[List[int]] = None,
+        top_k: Optional[int] = None,
+        max_new_tokens: int = MAX_NEW_TOKENS,
+        temperature: float = TEMPERATURE,
+        top_p: float = TOP_P,
+    ) -> str:
+        """Generate with steering applied at multiple layers for a slice."""
+        layer_map = self.vectors.get(language, {}).get(category, {})
+        if not layer_map:
+            logger.warning(
+                "No vectors for %s/%s — returning unsteered output", language, category
+            )
+            return self.generate(prompt, max_new_tokens, temperature, top_p)
+
+        available = sorted(layer_map.keys())
+        selected = available
+
+        if layers:
+            selected = [l for l in layers if l in layer_map]
+
+        if top_k is not None and top_k > 0 and len(selected) > top_k:
+            # Prefer layers closest to the primary layer for stable steering.
+            selected = sorted(selected, key=lambda l: (abs(l - self.primary_layer), l))[
+                :top_k
+            ]
+            selected = sorted(selected)
+
+        if not selected:
+            return self.generate(prompt, max_new_tokens, temperature, top_p)
+
+        _alpha = alpha if alpha is not None else self.get_alpha(language, category)
+        hook_vectors = {l: (layer_map[l], _alpha) for l in selected}
+
+        hook = MultiLayerSteeringHook(
+            self.model,
+            hook_vectors,
             self.layer_accessor,
         )
         try:

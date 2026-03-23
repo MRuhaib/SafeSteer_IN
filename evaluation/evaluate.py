@@ -143,6 +143,9 @@ def run_evaluation(
     output_dir: Optional[Path] = None,
     test_dir: Optional[Path] = None,
     steered_only: bool = False,
+    alpha_sweep: Optional[List[float]] = None,
+    use_multilayer: bool = False,
+    multilayer_top_k: int = 3,
 ):
     """
     Run evaluation over all available (language × category) slices.
@@ -173,6 +176,9 @@ def run_evaluation(
                 max_new_tokens=max_new_tokens,
                 languages=_languages,
                 categories=_categories,
+                alpha_values=alpha_sweep,
+                use_multilayer=use_multilayer,
+                multilayer_top_k=multilayer_top_k,
             )
         return run_full_eval_from_files(
             engine=engine,
@@ -332,6 +338,9 @@ def run_steered_export_from_files(
     max_new_tokens: int,
     languages: List[str],
     categories: List[str],
+    alpha_values: Optional[List[float]] = None,
+    use_multilayer: bool = False,
+    multilayer_top_k: int = 3,
 ):
     """Run steered generation over external prompt files with incremental per-file exports."""
     export_root = output_dir / "steered_exports" / model_key
@@ -339,10 +348,23 @@ def run_steered_export_from_files(
     file_export_root = export_root / "by_test_file"
     file_export_root.mkdir(parents=True, exist_ok=True)
 
+    alpha_values = alpha_values or [None]
+    alpha_labels = [
+        "default_or_calibrated" if a is None else str(a).replace(".", "p")
+        for a in alpha_values
+    ]
+
     test_files = sorted(
         [p for p in test_dir.iterdir() if p.suffix.lower() in {".csv", ".xlsx", ".xls"}]
     )
-    logger.info("Found %d external test files in %s", len(test_files), test_dir)
+    logger.info(
+        "Found %d external test files in %s | alpha sweep=%s | multilayer=%s top_k=%d",
+        len(test_files),
+        test_dir,
+        alpha_values,
+        use_multilayer,
+        multilayer_top_k,
+    )
 
     all_rows: List[dict] = []
     total_samples = 0
@@ -386,54 +408,99 @@ def run_steered_export_from_files(
         file_rows: List[dict] = []
         file_steered = 0
 
-        for sample_idx, r in enumerate(
-            tqdm(capped_rows, desc=f"steered {file_path.name}", leave=False), start=1
-        ):
-            lang = r["language"]
-            cat = r["category"]
-            prompt = r["prompt_text"]
+        for alpha_idx, alpha in enumerate(alpha_values, start=1):
+            alpha_label = alpha_labels[alpha_idx - 1]
+            logger.info(
+                "[%s] alpha %d/%d = %s",
+                file_path.name,
+                alpha_idx,
+                len(alpha_values),
+                alpha,
+            )
 
-            t0 = time.time()
-            if engine.has_vector(lang, cat):
-                out = engine.generate_steered(
-                    prompt,
-                    lang,
-                    cat,
-                    max_new_tokens=max_new_tokens,
-                )
-                steering_applied = True
-                file_steered += 1
-                total_steering_applied += 1
-            else:
-                out = engine.generate(prompt, max_new_tokens=max_new_tokens)
+            for sample_idx, r in enumerate(
+                tqdm(
+                    capped_rows,
+                    desc=f"steered {file_path.name} alpha={alpha}",
+                    leave=False,
+                ),
+                start=1,
+            ):
+                lang = r["language"]
+                cat = r["category"]
+                prompt = r["prompt_text"]
+
+                t0 = time.time()
                 steering_applied = False
+                layers_used: List[int] = []
 
-            latency = (time.time() - t0) * 1000
-            row = {
-                "source_file": file_path.name,
-                "prompt_id": r["prompt_id"],
-                "language": lang,
-                "category": cat,
-                "prompt_text": prompt,
-                "steered_output": out,
-                "latency_ms": round(latency, 2),
-                "steering_applied": steering_applied,
-                "model": model_key,
-            }
-            file_rows.append(row)
-            all_rows.append(row)
-            total_samples += 1
+                if use_multilayer and engine.has_any_vector(lang, cat):
+                    layers_used = engine.get_available_layers(lang, cat)
+                    if multilayer_top_k > 0 and len(layers_used) > multilayer_top_k:
+                        primary = engine.primary_layer
+                        layers_used = sorted(
+                            sorted(
+                                layers_used,
+                                key=lambda l: (abs(l - primary), l),
+                            )[:multilayer_top_k]
+                        )
 
-            if sample_idx % 20 == 0 or sample_idx == len(capped_rows):
-                logger.info(
-                    "[%s] samples %d/%d | file_steered=%d | total_samples=%d total_steered=%d",
-                    file_path.name,
-                    sample_idx,
-                    len(capped_rows),
-                    file_steered,
-                    total_samples,
-                    total_steering_applied,
-                )
+                    out = engine.generate_steered_multilayer(
+                        prompt,
+                        lang,
+                        cat,
+                        alpha=alpha,
+                        layers=layers_used,
+                        top_k=multilayer_top_k,
+                        max_new_tokens=max_new_tokens,
+                    )
+                    steering_applied = True
+                elif engine.has_vector(lang, cat):
+                    layers_used = [engine.primary_layer]
+                    out = engine.generate_steered(
+                        prompt,
+                        lang,
+                        cat,
+                        alpha=alpha,
+                        max_new_tokens=max_new_tokens,
+                    )
+                    steering_applied = True
+                else:
+                    out = engine.generate(prompt, max_new_tokens=max_new_tokens)
+
+                if steering_applied:
+                    file_steered += 1
+                    total_steering_applied += 1
+
+                latency = (time.time() - t0) * 1000
+                row = {
+                    "source_file": file_path.name,
+                    "prompt_id": r["prompt_id"],
+                    "language": lang,
+                    "category": cat,
+                    "alpha": alpha if alpha is not None else "default_or_calibrated",
+                    "layers_used": "|".join(str(x) for x in layers_used),
+                    "prompt_text": prompt,
+                    "steered_output": out,
+                    "latency_ms": round(latency, 2),
+                    "steering_applied": steering_applied,
+                    "model": model_key,
+                }
+                file_rows.append(row)
+                all_rows.append(row)
+                total_samples += 1
+
+                if sample_idx % 20 == 0 or sample_idx == len(capped_rows):
+                    logger.info(
+                        "[%s][alpha=%s] samples %d/%d | file_steered=%d | total_samples=%d total_steered=%d",
+                        file_path.name,
+                        alpha,
+                        sample_idx,
+                        len(capped_rows),
+                        file_steered,
+                        total_samples,
+                        total_steering_applied,
+                    )
 
         # Save per-file outputs immediately.
         stem = file_path.stem
@@ -446,6 +513,25 @@ def run_steered_export_from_files(
         file_json = file_export_root / f"{stem}_steered.json"
         with open(file_json, "w", encoding="utf-8") as f:
             json.dump(file_rows, f, ensure_ascii=False, indent=2)
+
+        # Also export per-file grouped by alpha for easier comparison.
+        for alpha_label in alpha_labels:
+            alpha_rows = [
+                r
+                for r in file_rows
+                if str(r["alpha"]).replace(".", "p") == alpha_label
+                or (
+                    alpha_label == "default_or_calibrated"
+                    and r["alpha"] == "default_or_calibrated"
+                )
+            ]
+            if not alpha_rows:
+                continue
+            alpha_csv = file_export_root / f"{stem}_alpha_{alpha_label}.csv"
+            with open(alpha_csv, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=alpha_rows[0].keys())
+                writer.writeheader()
+                writer.writerows(alpha_rows)
 
         # Update combined outputs after every file.
         combined_csv = export_root / "all_categories_steered.csv"
