@@ -28,7 +28,7 @@ for _d in [DATASET_DIR, VECTORS_DIR, MODELS_DIR, EVALUATION_DIR, LOGS_DIR]:
 # chat_format values:
 #   None      → raw completion (base model, no system/user/assistant wrapper)
 #   "tulu"    → <|user|>\n{prompt}\n<|assistant|>\n   (Airavata / IndicInstruct)
-#   "chatml"  → tokenizer.apply_chat_template()         (sarvam-m)
+#   "chatml"  → tokenizer.apply_chat_template()         (sarvam-m / Krutrim)
 #
 # requires_high_vram → flag shown as a warning in the Gradio UI
 #
@@ -46,6 +46,7 @@ MODEL_CONFIGS = {
         "chat_format": None,  # base/completion model
         "requires_high_vram": False,
         "license": "llama2",
+        "supported_languages": ["hi", "hi-en"],
     },
     # ── Airavata 7B (Hindi instruction-tuned) ────────────────────────────
     "airavata": {
@@ -60,6 +61,7 @@ MODEL_CONFIGS = {
         "chat_format": "tulu",  # <|user|>\n...\n<|assistant|>\n
         "requires_high_vram": False,
         "license": "llama2",  # gated — requires HF login
+        "supported_languages": ["hi", "hi-en"],
     },
     # ── Sarvam-1 (2-3B lightweight base model) ───────────────────────────
     "sarvam-1": {
@@ -74,6 +76,7 @@ MODEL_CONFIGS = {
         "chat_format": None,  # completion / base model
         "requires_high_vram": False,
         "license": "sarvam-non-commercial",
+        "supported_languages": None,  # None = use any language in LANGUAGES
     },
     # ── Sarvam-M 24B (multilingual reasoning — GPU-server only) ──────────
     "sarvam-m": {
@@ -88,6 +91,25 @@ MODEL_CONFIGS = {
         "chat_format": "chatml",  # tokenizer.apply_chat_template()
         "requires_high_vram": True,  # ~50 GB VRAM needed
         "license": "apache-2.0",
+        "supported_languages": None,  # None = use any language in LANGUAGES
+    },
+    # ── Krutrim-2-Instruct 12B (multilingual instruction) ───────────────
+    "krutrim-2-instruct": {
+        "model_id": "krutrim-ai-labs/Krutrim-2-instruct",
+        "display_name": "Krutrim-2-Instruct 12B (⚠ high VRAM)",
+        "description": "12B instruction-tuned model (Mistral-NeMo architecture) with long-context support and strong Indic coverage.",
+        "num_layers": 40,
+        "hidden_dim": 5120,
+        "target_layers": list(
+            range(16, 29, 2)
+        ),  # middle-depth sweep for 40-layer stack
+        "primary_layer": 22,
+        "layer_accessor": "model.layers",
+        "chat_format": "chatml",  # use tokenizer.apply_chat_template()
+        "requires_high_vram": True,
+        "license": "krutrim-community-license-agreement-version-1.0",
+        "default_temperature": 0.3,
+        "supported_languages": None,  # model card supports many Indic languages
     },
 }
 
@@ -118,6 +140,19 @@ def format_prompt(prompt: str, model_key: str | None = None) -> str:
         return f"<|user|>\n{prompt}\n<|assistant|>\n"
     # "chatml" — caller must use tokenizer.apply_chat_template() directly
     return prompt
+
+
+def get_supported_languages(model_key: str | None = None) -> list[str] | None:
+    """
+    Return language codes explicitly supported by this model config.
+
+    Returns None when the model is configured to support all project languages.
+    """
+    cfg = get_model_config(model_key)
+    langs = cfg.get("supported_languages")
+    if langs is None:
+        return None
+    return list(langs)
 
 
 # ─── IndicBERT Classifier ───────────────────────────────────────────────────

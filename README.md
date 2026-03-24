@@ -30,6 +30,7 @@ The repository is currently optimized for:
 - `openhathi-base`
 - `airavata`
 - `sarvam-m` (high VRAM)
+- `krutrim-2-instruct` (12B, high VRAM; use `--quantize-4bit` on Kaggle)
 
 ## Supported languages
 
@@ -106,6 +107,17 @@ python scripts/02_extract_vectors.py \
 python scripts/02_extract_vectors.py \
   --model openhathi-base \
   --quantize-4bit \
+  --languages hi \
+  --categories communal_religious_hate caste_discrimination political_misinformation gender_based_violence code_mixed_toxicity anti_minority_sentiment child_safety financial_scam \
+  --no-probe
+```
+
+### 3B) Extract steering vectors (Krutrim-2-Instruct 4-bit)
+
+```bash
+python scripts/02_extract_vectors.py \
+  --model krutrim-2-instruct \
+  --quantize-4bit \
   --languages hi ta bn gu mr hi-en te kn ml \
   --categories communal_religious_hate caste_discrimination political_misinformation gender_based_violence code_mixed_toxicity anti_minority_sentiment child_safety financial_scam \
   --no-probe
@@ -116,13 +128,25 @@ python scripts/02_extract_vectors.py \
 ```bash
 python scripts/05_evaluate.py \
   --model sarvam-1 \
-  --test-dir data/datasets/test \
+  --test-dir data/datasets/expanded \
   --steered-only \
   --max-prompts 200 \
   --max-tokens 128
 ```
 
 Repeat with `--model openhathi-base`.
+
+For Hindi-only evaluation on language-specific models:
+
+```bash
+python scripts/05_evaluate.py \
+  --model openhathi-base \
+  --test-dir data/datasets/expanded \
+  --languages hi \
+  --steered-only
+```
+
+Repeat similarly with `--model krutrim-2-instruct`.
 
 Output location:
 

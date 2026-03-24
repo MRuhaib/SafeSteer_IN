@@ -65,6 +65,7 @@ class SteeringEngine:
         self.model_key = model_key
         self.cfg = MODEL_CONFIGS[model_key]
         self.default_alpha = default_alpha
+        self.default_temperature = self.cfg.get("default_temperature", TEMPERATURE)
         self.primary_layer = self.cfg["primary_layer"]
         self.layer_accessor = self.cfg["layer_accessor"]
 
@@ -145,6 +146,43 @@ class SteeringEngine:
     # ── Generation ───────────────────────────────────────────────────────
 
     @torch.no_grad()
+    def _build_generation_inputs(self, prompt: str, max_length: int = 512) -> Dict:
+        """Tokenize prompt according to model-specific chat format settings."""
+        chat_format = self.cfg.get("chat_format")
+
+        if chat_format == "chatml":
+            messages = [{"role": "user", "content": prompt}]
+            chat_tokens = self.tokenizer.apply_chat_template(
+                messages,
+                tokenize=True,
+                add_generation_prompt=True,
+                return_tensors="pt",
+            )
+            if isinstance(chat_tokens, torch.Tensor):
+                inputs = {"input_ids": chat_tokens}
+            else:
+                inputs = dict(chat_tokens)
+        elif chat_format == "tulu":
+            tulu_prompt = f"<|user|>\n{prompt}\n<|assistant|>\n"
+            inputs = self.tokenizer(
+                tulu_prompt,
+                return_tensors="pt",
+                truncation=True,
+                max_length=max_length,
+            )
+        else:
+            inputs = self.tokenizer(
+                prompt,
+                return_tensors="pt",
+                truncation=True,
+                max_length=max_length,
+            )
+
+        if "token_type_ids" in inputs:
+            inputs.pop("token_type_ids")
+        return {k: v.to(self.model.device) for k, v in inputs.items()}
+
+    @torch.no_grad()
     def generate(
         self,
         prompt: str,
@@ -153,13 +191,7 @@ class SteeringEngine:
         top_p: float = TOP_P,
     ) -> str:
         """Generate without steering (baseline)."""
-        inputs = self.tokenizer(
-            prompt,
-            return_tensors="pt",
-            truncation=True,
-            max_length=512,
-        )
-        inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
+        inputs = self._build_generation_inputs(prompt, max_length=512)
         out = self.model.generate(
             **inputs,
             max_new_tokens=max_new_tokens,

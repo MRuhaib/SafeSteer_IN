@@ -29,7 +29,7 @@ def main():
         "--model",
         type=str,
         default=None,
-        help="Model key: openhathi-base | airavata | sarvam-1 | sarvam-m",
+        help="Model key: openhathi-base | airavata | sarvam-1 | sarvam-m | krutrim-2-instruct",
     )
     parser.add_argument(
         "--languages", nargs="+", default=None, help="Language codes (default: all)"
