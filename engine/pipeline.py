@@ -42,10 +42,24 @@ class PipelineResult:
     detected_language: str = ""
     detected_category: str = ""
     risk_score: float = 0.0
+    classifier_latency_ms: float = 0.0
     steering_applied: bool = False
+    steering_language_used: str = ""
+    steering_category_used: str = ""
+    steering_layer_used: Optional[int] = None
     alpha_used: float = 0.0
     raw_output: str = ""
     steered_output: str = ""
+    raw_latency_ms: float = 0.0
+    steered_latency_ms: float = 0.0
+    raw_response_harmful: bool = False
+    raw_response_risk_score: float = 0.0
+    raw_response_language: str = ""
+    raw_response_category: str = ""
+    steered_response_harmful: bool = False
+    steered_response_risk_score: float = 0.0
+    steered_response_language: str = ""
+    steered_response_category: str = ""
     azure_score_raw: Optional[Dict] = None
     azure_score_steered: Optional[Dict] = None
     latency_ms: float = 0.0
@@ -60,13 +74,19 @@ class SafeSteerPipeline:
         self,
         model_key: Optional[str] = None,
         risk_threshold: float = RISK_THRESHOLD,
-        default_alpha: float = DEFAULT_ALPHA,
+        default_alpha: Optional[float] = None,
         use_azure_safety: bool = False,
         device: Optional[str] = None,
     ):
         self.model_key = model_key or ACTIVE_MODEL
         self.risk_threshold = risk_threshold
-        self.default_alpha = default_alpha
+        self.default_alpha = (
+            float(default_alpha)
+            if default_alpha is not None
+            else float(
+                MODEL_CONFIGS[self.model_key].get("default_alpha", DEFAULT_ALPHA)
+            )
+        )
         self.use_azure_safety = use_azure_safety
         self._device = device or ("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -118,6 +138,7 @@ class SafeSteerPipeline:
         prompt: str,
         force_language: Optional[str] = None,
         force_category: Optional[str] = None,
+        force_layer: Optional[int] = None,
         alpha: Optional[float] = None,
         max_new_tokens: int = MAX_NEW_TOKENS,
         always_steer: bool = False,
@@ -136,24 +157,44 @@ class SafeSteerPipeline:
         result = PipelineResult(prompt=prompt)
 
         # Step 1: Classification
+        t_cls = time.time()
         cls = self._classifier.predict(prompt)
+        result.classifier_latency_ms = (time.time() - t_cls) * 1000
         result.detected_language = force_language or cls["language"]
         result.detected_category = force_category or cls["category"]
         result.risk_score = cls["risk_score"]
 
         # Step 2: Baseline generation
+        t_raw = time.time()
         result.raw_output = self._engine.generate(prompt, max_new_tokens)
+        result.raw_latency_ms = (time.time() - t_raw) * 1000
 
         # Step 3: Steered generation
         should_steer = always_steer or result.risk_score >= self.risk_threshold
         steer_lang = result.detected_language
         steer_cat = result.detected_category
-        if should_steer and not self._engine.has_vector(steer_lang, steer_cat):
+        steer_layer = force_layer
+        if should_steer and not self._engine.has_vector(
+            steer_lang,
+            steer_cat,
+            layer=steer_layer,
+        ):
             # Fall back to the best available vector for this language, then hi
             available = self._engine.available_slices()
+
+            def _has_requested_layer(lang: str, cat: str) -> bool:
+                return self._engine.has_vector(lang, cat, layer=steer_layer)
+
             fallback = next(
-                (s for s in available if s[0] == steer_lang),
-                next((s for s in available if s[0] == "hi"), None),
+                (
+                    s
+                    for s in available
+                    if s[0] == steer_lang and _has_requested_layer(*s)
+                ),
+                next(
+                    (s for s in available if s[0] == "hi" and _has_requested_layer(*s)),
+                    None,
+                ),
             )
             if fallback:
                 steer_lang, steer_cat = fallback
@@ -165,22 +206,67 @@ class SafeSteerPipeline:
                     steer_cat,
                 )
 
-        if should_steer and self._engine.has_vector(steer_lang, steer_cat):
-            _alpha = alpha or self._engine.get_alpha(steer_lang, steer_cat)
+        result.steering_language_used = steer_lang
+        result.steering_category_used = steer_cat
+        result.steering_layer_used = steer_layer or self._engine.primary_layer
+
+        if should_steer and self._engine.has_vector(
+            steer_lang,
+            steer_cat,
+            layer=steer_layer,
+        ):
+            _alpha = (
+                alpha
+                if alpha is not None
+                else self._engine.get_alpha(
+                    steer_lang,
+                    steer_cat,
+                )
+            )
+            t_steered = time.time()
             result.steered_output = self._engine.generate_steered(
                 prompt,
                 steer_lang,
                 steer_cat,
                 alpha=_alpha,
+                layer=steer_layer,
                 max_new_tokens=max_new_tokens,
             )
+            result.steered_latency_ms = (time.time() - t_steered) * 1000
             result.steering_applied = True
             result.alpha_used = _alpha
         else:
             result.steered_output = result.raw_output
+            result.steered_latency_ms = 0.0
             result.steering_applied = False
             if should_steer:
                 logger.info("No steering vectors available — showing raw output")
+
+        # Step 3.5: Run response harmfulness scoring with the trained classifier
+        try:
+            raw_resp = self._classifier.predict(result.raw_output)
+            result.raw_response_risk_score = raw_resp["risk_score"]
+            result.raw_response_harmful = (
+                result.raw_response_risk_score >= self.risk_threshold
+            )
+            result.raw_response_language = raw_resp["language"]
+            result.raw_response_category = raw_resp["category"]
+
+            if result.steered_output == result.raw_output:
+                result.steered_response_risk_score = result.raw_response_risk_score
+                result.steered_response_harmful = result.raw_response_harmful
+                result.steered_response_language = result.raw_response_language
+                result.steered_response_category = result.raw_response_category
+            else:
+                steered_resp = self._classifier.predict(result.steered_output)
+                result.steered_response_risk_score = steered_resp["risk_score"]
+                result.steered_response_harmful = (
+                    result.steered_response_risk_score >= self.risk_threshold
+                )
+                result.steered_response_language = steered_resp["language"]
+                result.steered_response_category = steered_resp["category"]
+        except Exception as e:
+            logger.warning("Response harmfulness scoring failed: %s", e)
 
         # Step 4: Azure Content Safety scoring
         if self._azure_scorer is not None:

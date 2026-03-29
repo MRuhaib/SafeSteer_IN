@@ -38,6 +38,7 @@ MODEL_CONFIGS = {
         "model_id": "sarvamai/OpenHathi-7B-Hi-v0.1-Base",
         "display_name": "OpenHathi 7B (Hindi base)",
         "description": "LLaMA-2 7B fine-tuned for Hindi, English & Hinglish. Best for raw activation probing.",
+        "default_alpha": 15.0,
         "num_layers": 32,
         "hidden_dim": 4096,
         "target_layers": list(range(10, 23, 2)),  # middle-depth sweep (every 2 layers)
@@ -53,6 +54,7 @@ MODEL_CONFIGS = {
         "model_id": "ai4bharat/Airavata",
         "display_name": "Airavata 7B (Hindi instruction)",
         "description": "LLaMA-2 7B instruction-tuned on IndicInstruct. Best for Hindi safety evaluation.",
+        "default_alpha": 15.0,
         "num_layers": 32,
         "hidden_dim": 4096,
         "target_layers": list(range(12, 22)),
@@ -68,6 +70,7 @@ MODEL_CONFIGS = {
         "model_id": "sarvamai/sarvam-1",
         "display_name": "Sarvam-1 ~2B (lightweight)",
         "description": "~2B LLaMA-style model. Fastest on CPU/low-VRAM. Non-commercial license.",
+        "default_alpha": 12.0,
         "num_layers": 28,
         "hidden_dim": 2048,
         "target_layers": list(range(8, 19, 2)),  # middle-depth sweep (every 2 layers)
@@ -83,6 +86,7 @@ MODEL_CONFIGS = {
         "model_id": "sarvamai/sarvam-m",
         "display_name": "Sarvam-M 24B (⚠ high VRAM)",
         "description": "Mistral-Small-3.1-24B-based multilingual model. Requires ~50 GB VRAM — GPU server only.",
+        "default_alpha": 15.0,
         "num_layers": 40,
         "hidden_dim": 5120,
         "target_layers": list(range(16, 26)),  # ~40-65 % of 40 layers
@@ -98,6 +102,7 @@ MODEL_CONFIGS = {
         "model_id": "krutrim-ai-labs/Krutrim-2-instruct",
         "display_name": "Krutrim-2-Instruct 12B (⚠ high VRAM)",
         "description": "12B instruction-tuned model (Mistral-NeMo architecture) with long-context support and strong Indic coverage.",
+        "default_alpha": 10.0,
         "num_layers": 40,
         "hidden_dim": 5120,
         "target_layers": list(
@@ -205,6 +210,13 @@ DATASET_SPLIT_RATIOS = {"train": 0.8, "val": 0.1, "test": 0.1}
 DEFAULT_ALPHA = 15.0
 ALPHA_SEARCH_RANGE = [5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]
 MAX_PERPLEXITY_INCREASE = 0.20  # 20 %
+
+
+def get_model_default_alpha(model_key: str | None = None) -> float:
+    """Return model-specific alpha default when configured, otherwise DEFAULT_ALPHA."""
+    cfg = get_model_config(model_key)
+    return float(cfg.get("default_alpha", DEFAULT_ALPHA))
+
 
 # ─── Quantization (BitsAndBytes 4-bit) ──────────────────────────────────────
 USE_4BIT = False

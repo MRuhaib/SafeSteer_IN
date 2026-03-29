@@ -64,7 +64,7 @@ class SteeringEngine:
         self.tokenizer = tokenizer
         self.model_key = model_key
         self.cfg = MODEL_CONFIGS[model_key]
-        self.default_alpha = default_alpha
+        self.default_alpha = float(self.cfg.get("default_alpha", default_alpha))
         self.default_temperature = self.cfg.get("default_temperature", TEMPERATURE)
         self.primary_layer = self.cfg["primary_layer"]
         self.layer_accessor = self.cfg["layer_accessor"]
@@ -125,8 +125,13 @@ class SteeringEngine:
         key = f"{language}/{category}"
         return self.calibrated_alphas.get(key, self.default_alpha)
 
-    def has_vector(self, language: str, category: str) -> bool:
-        return self.get_vector(language, category) is not None
+    def has_vector(
+        self,
+        language: str,
+        category: str,
+        layer: Optional[int] = None,
+    ) -> bool:
+        return self.get_vector(language, category, layer=layer) is not None
 
     def has_any_vector(self, language: str, category: str) -> bool:
         return bool(self.vectors.get(language, {}).get(category, {}))
