@@ -3,6 +3,20 @@
   "language": "hi-en",
   "category": "code_mixed_toxicity",
   "layers": {
+    "8": {
+      "file": "layer8.pt",
+      "norm": 1.0,
+      "shape": [
+        2048
+      ]
+    },
+    "10": {
+      "file": "layer10.pt",
+      "norm": 1.0,
+      "shape": [
+        2048
+      ]
+    },
     "12": {
       "file": "layer12.pt",
       "norm": 1.0,
@@ -12,7 +26,7 @@
     },
     "14": {
       "file": "layer14.pt",
-      "norm": 0.99951171875,
+      "norm": 1.0,
       "shape": [
         2048
       ]
@@ -23,12 +37,22 @@
       "shape": [
         2048
       ]
+    },
+    "18": {
+      "file": "layer18.pt",
+      "norm": 0.99951171875,
+      "shape": [
+        2048
+      ]
     }
   },
-  "num_pairs": 70,
+  "num_pairs": 21,
   "target_layers": [
+    8,
+    10,
     12,
     14,
-    16
+    16,
+    18
   ]
 }

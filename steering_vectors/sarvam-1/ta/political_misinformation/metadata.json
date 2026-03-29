@@ -23,12 +23,36 @@
       "shape": [
         2048
       ]
+    },
+    "14": {
+      "file": "layer14.pt",
+      "norm": 1.0,
+      "shape": [
+        2048
+      ]
+    },
+    "16": {
+      "file": "layer16.pt",
+      "norm": 1.0,
+      "shape": [
+        2048
+      ]
+    },
+    "18": {
+      "file": "layer18.pt",
+      "norm": 1.0,
+      "shape": [
+        2048
+      ]
     }
   },
-  "num_pairs": 45,
+  "num_pairs": 24,
   "target_layers": [
     8,
     10,
-    12
+    12,
+    14,
+    16,
+    18
   ]
 }
