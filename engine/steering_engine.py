@@ -144,8 +144,9 @@ class SteeringEngine:
         """Return list of (language, category) pairs that have vectors."""
         slices = []
         for lang, cats in self.vectors.items():
-            for cat in cats:
-                slices.append((lang, cat))
+            for cat, layer_map in cats.items():
+                if layer_map:
+                    slices.append((lang, cat))
         return slices
 
     # ── Generation ───────────────────────────────────────────────────────
