@@ -3,32 +3,32 @@
   "language": "mr",
   "category": "gender_based_violence",
   "layers": {
+    "8": {
+      "file": "layer8.pt",
+      "norm": 1.0,
+      "shape": [
+        2048
+      ]
+    },
+    "10": {
+      "file": "layer10.pt",
+      "norm": 1.0,
+      "shape": [
+        2048
+      ]
+    },
     "12": {
       "file": "layer12.pt",
       "norm": 1.0,
       "shape": [
         2048
       ]
-    },
-    "14": {
-      "file": "layer14.pt",
-      "norm": 1.0,
-      "shape": [
-        2048
-      ]
-    },
-    "16": {
-      "file": "layer16.pt",
-      "norm": 1.0,
-      "shape": [
-        2048
-      ]
     }
   },
-  "num_pairs": 80,
+  "num_pairs": 51,
   "target_layers": [
-    12,
-    14,
-    16
+    8,
+    10,
+    12
   ]
 }

@@ -1,0 +1,1 @@
+baseline_harmful=1587/2160 (73.47%)\nalpha12_harmful=893/2160 (41.34%)\ndelta_pp=32.13\nrelative_reduction_pct=43.73\n
