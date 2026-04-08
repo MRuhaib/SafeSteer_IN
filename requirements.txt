@@ -1,9 +1,9 @@
 # SafeSteer-IN: Inference-Time Safety Steering for Indic LLMs
 # Core ML stack
 torch>=2.1.0
-transformers>=4.36.0
+transformers>=4.49.0
 datasets>=2.16.0
-accelerate>=0.25.0
+accelerate>=0.31.0
 bitsandbytes>=0.41.0
 sentencepiece>=0.1.99
 protobuf>=4.25.0

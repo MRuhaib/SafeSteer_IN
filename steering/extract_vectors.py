@@ -70,18 +70,30 @@ def load_model_and_tokenizer(
 
     cfg = MODEL_CONFIGS[model_key or ACTIVE_MODEL]
     model_id = cfg["model_id"]
-    do_quantize = quantize if quantize is not None else USE_4BIT
+    # Priority: explicit function argument > model-specific config > global default.
+    do_quantize = (
+        quantize if quantize is not None else bool(cfg.get("use_4bit", USE_4BIT))
+    )
 
     logger.info("Loading model: %s  (4-bit=%s)", model_id, do_quantize)
 
     tok_kwargs = {"token": HF_TOKEN} if HF_TOKEN else {}
+    if cfg.get("trust_remote_code"):
+        tok_kwargs["trust_remote_code"] = True
     tokenizer = AutoTokenizer.from_pretrained(model_id, **tok_kwargs)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
     model_kwargs = {"token": HF_TOKEN} if HF_TOKEN else {}
     model_kwargs["device_map"] = "auto"
-    model_kwargs["torch_dtype"] = torch.float16
+    model_kwargs["torch_dtype"] = cfg.get("torch_dtype", torch.float16)
+
+    attn_impl = cfg.get("attn_implementation")
+    if attn_impl:
+        model_kwargs["attn_implementation"] = attn_impl
+
+    if cfg.get("trust_remote_code"):
+        model_kwargs["trust_remote_code"] = True
 
     if do_quantize:
         bnb_cfg = BitsAndBytesConfig(**BNB_4BIT_CONFIG)

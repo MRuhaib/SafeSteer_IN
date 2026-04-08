@@ -1323,7 +1323,6 @@ def create_demo() -> gr.Blocks:
                 raw_output = gr.Textbox(
                     label="Baseline Output",
                     lines=13,
-                    show_copy_button=True,
                     elem_classes=["ss-output"],
                 )
             with gr.Column(scale=5, elem_classes=["ss-card", "ss-card-steer"]):
@@ -1331,7 +1330,6 @@ def create_demo() -> gr.Blocks:
                 steered_output = gr.Textbox(
                     label="Steered Output",
                     lines=13,
-                    show_copy_button=True,
                     elem_classes=["ss-output"],
                 )
 
@@ -1345,7 +1343,6 @@ def create_demo() -> gr.Blocks:
             normalized_prompt = gr.Textbox(
                 label="Prompt Used",
                 lines=3,
-                show_copy_button=True,
                 elem_classes=["ss-card", "ss-output"],
             )
 

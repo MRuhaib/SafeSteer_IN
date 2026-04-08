@@ -33,7 +33,7 @@ from config import (
     MAX_NEW_TOKENS,
     MODEL_CONFIGS,
     VECTORS_DIR,
-    get_model_config,
+    build_model_inputs,
 )
 from steering.extract_vectors import load_model_and_tokenizer, load_vector
 from steering.hooks import SteeringHook
@@ -51,13 +51,20 @@ logging.basicConfig(
 
 
 @torch.no_grad()
-def compute_perplexity(model, tokenizer, text: str, max_length: int = 512) -> float:
-    """Compute the per-token perplexity of ``text`` under the model."""
-    inputs = tokenizer(
-        text, return_tensors="pt", truncation=True, max_length=max_length
-    )
-    inputs = {k: v.to(model.device) for k, v in inputs.items()}
-    outputs = model(**inputs, labels=inputs["input_ids"])
+def compute_perplexity(model, inputs) -> float:
+    """Compute the per-token perplexity of tokenized inputs under the model."""
+    if isinstance(inputs, torch.Tensor):
+        model_inputs = {"input_ids": inputs}
+    elif isinstance(inputs, dict):
+        model_inputs = dict(inputs)
+    else:
+        raise TypeError(f"Unsupported inputs type for perplexity: {type(inputs)!r}")
+
+    model_inputs = {k: v.to(model.device) for k, v in model_inputs.items()}
+    if "input_ids" not in model_inputs:
+        raise ValueError("Perplexity inputs must include input_ids")
+
+    outputs = model(**model_inputs, labels=model_inputs["input_ids"])
     loss = outputs.loss
     return math.exp(loss.item()) if loss.item() < 100 else float("inf")
 
@@ -72,9 +79,16 @@ def generate_text(
     model,
     tokenizer,
     prompt: str,
+    model_key: Optional[str] = None,
     max_new_tokens: int = MAX_NEW_TOKENS,
 ) -> str:
-    inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512)
+    inputs = build_model_inputs(
+        tokenizer,
+        prompt,
+        model_key,
+        add_generation_prompt=True,
+        max_length=512,
+    )
     inputs = {k: v.to(model.device) for k, v in inputs.items()}
     out = model.generate(
         **inputs,
@@ -92,6 +106,7 @@ def generate_text_steered(
     model,
     tokenizer,
     prompt: str,
+    model_key: Optional[str],
     vector: torch.Tensor,
     layer_idx: int,
     alpha: float,
@@ -100,7 +115,7 @@ def generate_text_steered(
 ) -> str:
     hook = SteeringHook(model, layer_idx, vector, alpha, layer_accessor)
     try:
-        text = generate_text(model, tokenizer, prompt, max_new_tokens)
+        text = generate_text(model, tokenizer, prompt, model_key, max_new_tokens)
     finally:
         hook.remove()
     return text
@@ -172,6 +187,7 @@ def calibrate_alpha(
     pairs: List[dict],
     vector: torch.Tensor,
     layer_idx: int,
+    model_key: Optional[str] = None,
     alphas: List[float] = ALPHA_SEARCH_RANGE,
     layer_accessor: str = "model.layers",
     max_pairs: int = 30,
@@ -191,9 +207,18 @@ def calibrate_alpha(
 
     # Baseline perplexity (unsteered) on safe text
     benign_texts = [
-        p["prompt"] + " " + p["safe_response"] for p in pairs[: min(10, len(pairs))]
+        (p["prompt"], p["safe_response"]) for p in pairs[: min(10, len(pairs))]
     ]
-    baseline_ppls = [compute_perplexity(model, tokenizer, t) for t in benign_texts]
+    baseline_ppls = []
+    for prompt, response in benign_texts:
+        inputs = build_model_inputs(
+            tokenizer,
+            prompt,
+            model_key,
+            response=response,
+            max_length=512,
+        )
+        baseline_ppls.append(compute_perplexity(model, inputs))
     baseline_ppl = sum(baseline_ppls) / len(baseline_ppls) if baseline_ppls else 1.0
 
     for alpha in alphas:
@@ -207,6 +232,7 @@ def calibrate_alpha(
                 model,
                 tokenizer,
                 prompt,
+                model_key,
                 vector,
                 layer_idx,
                 alpha,
@@ -219,9 +245,16 @@ def calibrate_alpha(
 
         # 2. Fluency (perplexity on benign)
         steered_ppls = []
-        for text in benign_texts:
+        for prompt, response in benign_texts:
             hook = SteeringHook(model, layer_idx, vector, alpha, layer_accessor)
-            ppl = compute_perplexity(model, tokenizer, text)
+            inputs = build_model_inputs(
+                tokenizer,
+                prompt,
+                model_key,
+                response=response,
+                max_length=512,
+            )
+            ppl = compute_perplexity(model, inputs)
             hook.remove()
             steered_ppls.append(ppl)
         steered_ppl = (
@@ -320,6 +353,7 @@ def run_full_calibration(
                 pairs,
                 vec,
                 primary_layer,
+                model_key=_model_key,
                 alphas=alphas,
                 layer_accessor=accessor,
                 max_pairs=max_pairs,

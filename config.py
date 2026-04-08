@@ -28,7 +28,7 @@ for _d in [DATASET_DIR, VECTORS_DIR, MODELS_DIR, EVALUATION_DIR, LOGS_DIR]:
 # chat_format values:
 #   None      → raw completion (base model, no system/user/assistant wrapper)
 #   "tulu"    → <|user|>\n{prompt}\n<|assistant|>\n   (Airavata / IndicInstruct)
-#   "chatml"  → tokenizer.apply_chat_template()         (sarvam-m / Krutrim)
+#   "chatml"  → tokenizer.apply_chat_template()         (sarvam-m / Krutrim / Phi)
 #
 # requires_high_vram → flag shown as a warning in the Gradio UI
 #
@@ -39,6 +39,7 @@ MODEL_CONFIGS = {
         "display_name": "OpenHathi 7B (Hindi base)",
         "description": "LLaMA-2 7B fine-tuned for Hindi, English & Hinglish. Best for raw activation probing.",
         "default_alpha": 15.0,
+        "use_4bit": False,
         "num_layers": 32,
         "hidden_dim": 4096,
         "target_layers": list(range(10, 23, 2)),  # middle-depth sweep (every 2 layers)
@@ -97,6 +98,42 @@ MODEL_CONFIGS = {
         "license": "apache-2.0",
         "supported_languages": None,  # None = use any language in LANGUAGES
     },
+    # ── Phi-3 Mini 4K Instruct (multilingual open model) ─────────────────
+    "phi-3-mini-4k-instruct": {
+        "model_id": "microsoft/Phi-3-mini-4k-instruct",
+        "display_name": "Phi-3 Mini 4K Instruct (3.8B)",
+        "description": "3.8B Phi-3 instruction-tuned model with 4K context, chat-template prompting, and broad multilingual capability.",
+        "default_alpha": 12.0,
+        "num_layers": 32,
+        "hidden_dim": 3072,
+        "target_layers": list(range(10, 23, 2)),
+        "primary_layer": 16,
+        "layer_accessor": "model.layers",
+        "chat_format": "chatml",
+        "requires_high_vram": False,
+        "license": "mit",
+        "supported_languages": None,
+        "trust_remote_code": True,
+        "attn_implementation": "eager",
+    },
+    # ── Phi-4 Mini Instruct (multilingual open model) ─────────────────────
+    "phi-4-mini-instruct": {
+        "model_id": "microsoft/Phi-4-mini-instruct",
+        "display_name": "Phi-4 Mini Instruct (3.8B)",
+        "description": "3.8B Phi-4 instruction model with 128K context, chat-template prompting, and stronger multilingual reasoning.",
+        "default_alpha": 12.0,
+        "num_layers": 32,
+        "hidden_dim": 3072,
+        "target_layers": list(range(10, 23, 2)),
+        "primary_layer": 16,
+        "layer_accessor": "model.layers",
+        "chat_format": "chatml",
+        "requires_high_vram": False,
+        "license": "mit",
+        "supported_languages": None,
+        "trust_remote_code": True,
+        "attn_implementation": "eager",
+    },
     # ── Krutrim-2-Instruct 12B (multilingual instruction) ───────────────
     "krutrim-2-instruct": {
         "model_id": "krutrim-ai-labs/Krutrim-2-instruct",
@@ -145,6 +182,62 @@ def format_prompt(prompt: str, model_key: str | None = None) -> str:
         return f"<|user|>\n{prompt}\n<|assistant|>\n"
     # "chatml" — caller must use tokenizer.apply_chat_template() directly
     return prompt
+
+
+def build_model_inputs(
+    tokenizer,
+    prompt: str,
+    model_key: str | None = None,
+    *,
+    response: str | None = None,
+    add_generation_prompt: bool = False,
+    max_length: int = 512,
+):
+    """
+    Build tokenized inputs for a model-aware prompt.
+
+    For chat-template models, this uses the tokenizer's chat template.
+    When *response* is provided, the assistant turn is included as well.
+    """
+    cfg = get_model_config(model_key)
+    fmt = cfg.get("chat_format")
+
+    if fmt == "chatml":
+        messages = [{"role": "user", "content": prompt}]
+        if response is not None:
+            messages.append({"role": "assistant", "content": response})
+        return tokenizer.apply_chat_template(
+            messages,
+            tokenize=True,
+            add_generation_prompt=add_generation_prompt and response is None,
+            return_tensors="pt",
+        )
+
+    if fmt == "tulu":
+        if response is not None:
+            text = f"<|user|>\n{prompt}\n<|assistant|>\n{response}"
+        elif add_generation_prompt:
+            text = f"<|user|>\n{prompt}\n<|assistant|>\n"
+        else:
+            text = prompt
+        return tokenizer(
+            text,
+            return_tensors="pt",
+            truncation=True,
+            max_length=max_length,
+        )
+
+    if response is not None:
+        text = f"{prompt} {response}".strip()
+    else:
+        text = prompt
+
+    return tokenizer(
+        text,
+        return_tensors="pt",
+        truncation=True,
+        max_length=max_length,
+    )
 
 
 def get_supported_languages(model_key: str | None = None) -> list[str] | None:

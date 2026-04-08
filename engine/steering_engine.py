@@ -32,6 +32,7 @@ from config import (
     TEMPERATURE,
     TOP_P,
     VECTORS_DIR,
+    build_model_inputs,
 )
 from steering.hooks import SteeringHook, MultiLayerSteeringHook
 from steering.extract_vectors import load_all_vectors, load_vector
@@ -154,35 +155,16 @@ class SteeringEngine:
     @torch.no_grad()
     def _build_generation_inputs(self, prompt: str, max_length: int = 512) -> Dict:
         """Tokenize prompt according to model-specific chat format settings."""
-        chat_format = self.cfg.get("chat_format")
+        inputs = build_model_inputs(
+            self.tokenizer,
+            prompt,
+            self.model_key,
+            add_generation_prompt=True,
+            max_length=max_length,
+        )
 
-        if chat_format == "chatml":
-            messages = [{"role": "user", "content": prompt}]
-            chat_tokens = self.tokenizer.apply_chat_template(
-                messages,
-                tokenize=True,
-                add_generation_prompt=True,
-                return_tensors="pt",
-            )
-            if isinstance(chat_tokens, torch.Tensor):
-                inputs = {"input_ids": chat_tokens}
-            else:
-                inputs = dict(chat_tokens)
-        elif chat_format == "tulu":
-            tulu_prompt = f"<|user|>\n{prompt}\n<|assistant|>\n"
-            inputs = self.tokenizer(
-                tulu_prompt,
-                return_tensors="pt",
-                truncation=True,
-                max_length=max_length,
-            )
-        else:
-            inputs = self.tokenizer(
-                prompt,
-                return_tensors="pt",
-                truncation=True,
-                max_length=max_length,
-            )
+        if isinstance(inputs, torch.Tensor):
+            inputs = {"input_ids": inputs}
 
         if "token_type_ids" in inputs:
             inputs.pop("token_type_ids")
