@@ -104,6 +104,7 @@ MODEL_CONFIGS = {
         "display_name": "Phi-3 Mini 4K Instruct (3.8B)",
         "description": "3.8B Phi-3 instruction-tuned model with 4K context, chat-template prompting, and broad multilingual capability.",
         "default_alpha": 12.0,
+        "use_cache": False,
         "num_layers": 32,
         "hidden_dim": 3072,
         "target_layers": list(range(10, 23, 2)),

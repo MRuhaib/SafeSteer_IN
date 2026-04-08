@@ -82,6 +82,7 @@ def generate_text(
     model_key: Optional[str] = None,
     max_new_tokens: int = MAX_NEW_TOKENS,
 ) -> str:
+    cfg = MODEL_CONFIGS[model_key] if model_key else {}
     inputs = build_model_inputs(
         tokenizer,
         prompt,
@@ -90,11 +91,16 @@ def generate_text(
         max_length=512,
     )
     inputs = {k: v.to(model.device) for k, v in inputs.items()}
+    generate_kwargs = {
+        "max_new_tokens": max_new_tokens,
+        "do_sample": False,  # greedy — avoids multinomial NaN crash under steering
+        "pad_token_id": tokenizer.eos_token_id,
+    }
+    if "use_cache" in cfg:
+        generate_kwargs["use_cache"] = bool(cfg["use_cache"])
     out = model.generate(
         **inputs,
-        max_new_tokens=max_new_tokens,
-        do_sample=False,  # greedy — avoids multinomial NaN crash under steering
-        pad_token_id=tokenizer.eos_token_id,
+        **generate_kwargs,
     )
     return tokenizer.decode(
         out[0][inputs["input_ids"].shape[1] :], skip_special_tokens=True

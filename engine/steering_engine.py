@@ -180,11 +180,16 @@ class SteeringEngine:
     ) -> str:
         """Generate without steering (baseline)."""
         inputs = self._build_generation_inputs(prompt, max_length=512)
+        generate_kwargs = {
+            "max_new_tokens": max_new_tokens,
+            "do_sample": False,  # greedy — avoids multinomial NaN crash under steering
+            "pad_token_id": self.tokenizer.eos_token_id,
+        }
+        if "use_cache" in self.cfg:
+            generate_kwargs["use_cache"] = bool(self.cfg["use_cache"])
         out = self.model.generate(
             **inputs,
-            max_new_tokens=max_new_tokens,
-            do_sample=False,  # greedy — avoids multinomial NaN crash under steering
-            pad_token_id=self.tokenizer.eos_token_id,
+            **generate_kwargs,
         )
         return self.tokenizer.decode(
             out[0][inputs["input_ids"].shape[1] :],
