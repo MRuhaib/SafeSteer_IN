@@ -1,0 +1,42 @@
+{
+  "model": "phi-4-mini-instruct",
+  "language": "hi-en",
+  "category": "financial_scam",
+  "layers": {
+    "10": {
+      "file": "layer10.pt",
+      "norm": 1.0,
+      "shape": [
+        3072
+      ]
+    },
+    "12": {
+      "file": "layer12.pt",
+      "norm": 1.0,
+      "shape": [
+        3072
+      ]
+    },
+    "14": {
+      "file": "layer14.pt",
+      "norm": 1.0,
+      "shape": [
+        3072
+      ]
+    },
+    "16": {
+      "file": "layer16.pt",
+      "norm": 0.99951171875,
+      "shape": [
+        3072
+      ]
+    }
+  },
+  "num_pairs": 51,
+  "target_layers": [
+    10,
+    12,
+    14,
+    16
+  ]
+}
