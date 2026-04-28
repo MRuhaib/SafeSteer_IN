@@ -1,0 +1,56 @@
+stages:
+  build_dataset:
+    cmd: python src/scripts/01_build_dataset.py
+    deps:
+      - src/scripts/01_build_dataset.py
+      - src/data/build_dataset.py
+      - src/data/templates.py
+      - src/data/taxonomy.py
+      - config.py
+    outs:
+      - src/data/datasets/train.jsonl
+      - src/data/datasets/val.jsonl
+      - src/data/datasets/test.jsonl
+
+  extract_vectors:
+    cmd: python src/scripts/02_extract_vectors.py
+    deps:
+      - src/scripts/02_extract_vectors.py
+      - src/steering/extract_vectors.py
+      - src/data/datasets/train.jsonl
+      - config.py
+    outs:
+      - src/steering_vectors
+
+  train_classifier:
+    cmd: python src/scripts/03_train_classifier.py
+    deps:
+      - src/scripts/03_train_classifier.py
+      - src/classifier/train_classifier.py
+      - src/data/datasets/train.jsonl
+      - src/data/datasets/val.jsonl
+      - config.py
+    outs:
+      - src/models/indic_risk_classifier
+
+  calibrate_alpha:
+    cmd: python src/scripts/04_calibrate_alpha.py
+    deps:
+      - src/scripts/04_calibrate_alpha.py
+      - src/steering/calibrate_alpha.py
+      - src/models/indic_risk_classifier
+      - src/steering_vectors
+      - src/data/datasets/val.jsonl
+      - config.py
+
+  evaluate:
+    cmd: python src/scripts/05_evaluate.py
+    deps:
+      - src/scripts/05_evaluate.py
+      - src/evaluation/evaluate.py
+      - src/models/indic_risk_classifier
+      - src/steering_vectors
+      - src/data/datasets/test.jsonl
+      - config.py
+    outs:
+      - src/evaluation/results

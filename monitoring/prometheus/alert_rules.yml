@@ -1,0 +1,14 @@
+groups:
+  - name: safesteer_alerts
+    rules:
+      - alert: HighErrorRate
+        expr: rate(safesteer_errors_total[5m]) > 0.05
+        for: 5m
+        annotations:
+          summary: "SafeSteer error rate >5%"
+
+      - alert: HighFallbackRate
+        expr: rate(safesteer_fallback_total[5m]) > 0.20
+        for: 5m
+        annotations:
+          summary: "SafeSteer fallback rate >20%"

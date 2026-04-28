@@ -1,0 +1,15 @@
+pipeline:
+  model: sarvam-1
+  languages: []
+  categories: []
+  max_prompts: 50
+  max_tokens: 128
+
+training:
+  epochs: 10
+  batch_size: 16
+  lr: 2.0e-5
+
+calibration:
+  alphas: [5, 10, 15, 20, 25, 30, 35, 40]
+  max_pairs: 30

@@ -90,7 +90,6 @@ python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -U pip
 pip install -r requirements.txt
-pip install sentencepiece openpyxl
 ```
 
 ### Optional Dependencies
@@ -115,46 +114,54 @@ Set the following environment variables as needed:
 export HF_TOKEN=<your_huggingface_token>
 export ANTHROPIC_API_KEY=<your_anthropic_api_key>
 export SAFESTEER_MODEL=sarvam-1  # or openhathi-base, krutrim-2-instruct
+export MLFLOW_TRACKING_URI=./mlruns
+export MLFLOW_EXPERIMENT_NAME=SafeSteer-IN
+export SMTP_SERVER=smtp.gmail.com
+export SMTP_PORT=587
+export SENDER_EMAIL=<alerts@domain.com>
+export SENDER_PASSWORD=<app_password>
 ```
 
 ## Repository Structure
 
 ```
 SafeSteer-IN/
-├── config.py                          # Global configuration and model definitions
-├── data/
-│   ├── taxonomy.py                   # Harm category definitions and metadata
-│   ├── templates.py                  # Seed contrastive templates (9 languages)
-│   ├── synthetic_generation.py       # Synthetic pair generation with optional Claude
-│   ├── build_dataset.py              # Dataset construction and splitting
-│   └── datasets/                     # Generated JSONL splits and expanded test data
-├── steering/
-│   ├── extract_vectors.py            # Vector extraction and model loading
-│   ├── hooks.py                      # PyTorch forward hooks for activation collection and injection
-│   └── calibrate_alpha.py            # Alpha parameter sweep and selection
-├── classifier/
-│   ├── train_classifier.py           # IndicBERT multi-task training (language + category)
-│   └── inference.py                  # Runtime prompt classification and risk scoring
-├── engine/
-│   ├── steering_engine.py            # Vector loading and steered generation API
-│   └── pipeline.py                   # Full inference orchestration
-├── evaluation/
-│   ├── evaluate.py                   # Evaluation runners and export modes
-│   ├── metrics.py                    # Safety metrics and fluency scoring
-│   ├── azure_safety.py               # Optional Azure Content Safety integration
-│   └── results/                      # Metric CSVs, exports, and plots
-├── scripts/
-│   ├── 01_build_dataset.py
-│   ├── 02_extract_vectors.py
-│   ├── 03_train_classifier.py
-│   ├── 04_calibrate_alpha.py
-│   ├── 05_evaluate.py
-│   └── 06_launch_demo.py
-├── app.py                            # Gradio web interface
 ├── api.py                            # FastAPI REST server
+├── app.py                            # Gradio web interface
+├── config.py                          # Global configuration and model definitions
+├── docs/                             # Architecture/HLD/LLD/Test/User docs
+├── mlops/                            # Orchestration configs (Airflow, pipeline runner)
+├── notifications/                    # SMTP alerting
+├── src/
+│   ├── data/                         # Dataset construction + taxonomy
+│   ├── steering/                     # Vector extraction + hooks + calibration
+│   ├── classifier/                   # IndicBERT classifier training/inference
+│   ├── engine/                       # Steering engine + pipeline
+│   ├── evaluation/                   # Evaluation runners + metrics
+│   ├── mlops/                        # MLflow helpers
+│   ├── monitoring/                   # Prometheus hooks (optional)
+│   ├── scripts/                      # Stage runners (01-06)
+│   └── utils/                         # Shared utilities
+├── data/                             # Generated JSONL splits (created on run)
+├── evaluation/results/               # Metric CSVs, exports, plots
 ├── steering_vectors/                 # Saved vector artifacts per model/language/category
 └── models/                           # Classifier checkpoints and label maps
 ```
+
+## Docs
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- [docs/HLD.md](docs/HLD.md)
+- [docs/LLD.md](docs/LLD.md)
+- [docs/TEST_PLAN.md](docs/TEST_PLAN.md)
+- [docs/USER_MANUAL.md](docs/USER_MANUAL.md)
+
+## MLOps Features
+
+- MLflow tracking hooks in stage scripts (dataset, vector extraction, classifier training, calibration, evaluation).
+- Orchestration entrypoint: `python mlops/pipeline_runner.py` (runs stages sequentially).
+- Airflow DAG template at `mlops/dags/safesteer_dag.py` (optional).
+- SMTP notifications via `notifications/smtp_handler.py` (optional).
 
 ## Execution Workflow
 
@@ -165,13 +172,13 @@ The offline phase needs to execute once to generate all necessary steering vecto
 #### Stage 1.1: Dataset Construction
 
 ```bash
-python scripts/01_build_dataset.py \
+python src/scripts/01_build_dataset.py \
   --no-augment \
   --min-pairs-per-slice 30 \
   --seed 42
 ```
 
-**Inputs**: Seed templates from `data/templates.py`, optionally Claude API for synthetic augmentation.
+**Inputs**: Seed templates from `src/data/templates.py`, optionally Claude API for synthetic augmentation.
 
 **Outputs**:
 - `data/datasets/train.jsonl` (80% of data)
@@ -194,7 +201,7 @@ python scripts/01_build_dataset.py \
 **For Sarvam-1 (9-language track)**:
 
 ```bash
-python scripts/02_extract_vectors.py \
+python src/scripts/02_extract_vectors.py \
   --model sarvam-1 \
   --languages hi ta bn gu mr hi-en te kn ml \
   --categories communal_religious_hate caste_discrimination political_misinformation \
@@ -206,7 +213,7 @@ python scripts/02_extract_vectors.py \
 **For OpenHathi-7B-Hindi (4-bit quantization)**:
 
 ```bash
-python scripts/02_extract_vectors.py \
+python src/scripts/02_extract_vectors.py \
   --model openhathi-base \
   --quantize-4bit \
   --languages hi \
@@ -223,7 +230,7 @@ python scripts/02_extract_vectors.py \
 #### Stage 1.3: Prompt Router Training
 
 ```bash
-python scripts/03_train_classifier.py \
+python src/scripts/03_train_classifier.py \
   --epochs 10 \
   --batch-size 16 \
   --lr 2e-5
@@ -241,7 +248,7 @@ python scripts/03_train_classifier.py \
 #### Stage 1.4: Alpha Calibration (Optional)
 
 ```bash
-python scripts/04_calibrate_alpha.py \
+python src/scripts/04_calibrate_alpha.py \
   --model sarvam-1 \
   --alphas 5 10 15 20 25 30 35 40 \
   --max-pairs 30
@@ -252,7 +259,7 @@ Produces calibrated steering strength parameters stored alongside vectors for la
 #### Stage 1.5: Evaluation and Export
 
 ```bash
-python scripts/05_evaluate.py \
+python src/scripts/05_evaluate.py \
   --model sarvam-1 \
   --test-dir data/datasets/expanded \
   --steered-only \
@@ -278,7 +285,7 @@ Once artifacts are generated, the runtime system enables safe steering during li
 #### Option A: Interactive Gradio Interface
 
 ```bash
-python scripts/06_launch_demo.py
+python src/scripts/06_launch_demo.py
 ```
 
 Launches web UI at `http://localhost:7860` with:
@@ -290,7 +297,7 @@ Launches web UI at `http://localhost:7860` with:
 #### Option B: FastAPI REST API
 
 ```bash
-python scripts/06_launch_demo.py --api-only
+python src/scripts/06_launch_demo.py --api-only
 ```
 
 Serves on `0.0.0.0:8000` with endpoints:

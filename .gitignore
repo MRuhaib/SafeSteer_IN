@@ -17,15 +17,55 @@ venv/
 .idea/
 *.swp
 
-# Data & Models (generated)
-logs/
+# -------------------------------------------------------
+# Data & Model Artifacts (tracked via DVC, not git)
+# -------------------------------------------------------
+
+# Steering vectors (large .pt binary files, versioned by DVC)
+steering_vectors/
+src/steering_vectors/
+
+# PyTorch binaries anywhere in the tree
+*.pt
+*.pth
+
+# Generated datasets (re-created by Stage 1)
+src/data/datasets/
+
+# Trained model checkpoints (re-created by Stage 3)
+models/
+
+# Evaluation outputs (re-created by Stage 5)
+src/evaluation/results/
+
+# MLflow run metadata
 mlruns/
 
+# DVC internals
+.dvc/cache/
+.dvc/tmp/
 
-# OS
+# Pipeline logs
+logs/
+airflow_home/
+
+# -------------------------------------------------------
+# OS artifacts
+# -------------------------------------------------------
 .DS_Store
 Thumbs.db
 desktop.ini
 
 # Jupyter
 .ipynb_checkpoints/
+phi_baseline_eval.ipynb
+safesteer_in.ipynb
+
+# -------------------------------------------------------
+# Local-only project files (not for submission)
+# -------------------------------------------------------
+images/
+mlops_project_guidelines.txt
+overview.md
+report.tex
+research_draft.tex

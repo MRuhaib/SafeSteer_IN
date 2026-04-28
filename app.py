@@ -8,12 +8,18 @@ from __future__ import annotations
 
 import gc
 import logging
+import sys
 import threading
 from pathlib import Path
 from typing import Dict, List, Tuple
 
 import gradio as gr
 import torch
+
+ROOT = Path(__file__).resolve().parent
+SRC_ROOT = ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
 
 from config import (
     ACTIVE_MODEL,
@@ -1445,4 +1451,10 @@ def create_demo() -> gr.Blocks:
 
 
 if __name__ == "__main__":
-    create_demo().launch(server_port=GRADIO_PORT, show_error=True)
+    import os
+
+    create_demo().launch(
+        server_name=os.getenv("GRADIO_SERVER_NAME", "0.0.0.0"),
+        server_port=GRADIO_PORT,
+        show_error=True,
+    )

@@ -20,10 +20,14 @@ import sys
 from pathlib import Path
 from typing import Dict, Optional
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+ROOT = Path(__file__).resolve().parent
+SRC_ROOT = ROOT / "src"
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from pydantic import BaseModel, Field
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
 from config import API_HOST, API_PORT, DEFAULT_ALPHA, MAX_NEW_TOKENS
 
@@ -36,6 +40,15 @@ app = FastAPI(
     title="SafeSteer-IN API",
     description="Inference-Time Safety Steering for Indic LLMs",
     version="0.1.0",
+)
+
+REQUESTS_TOTAL = Counter("safesteer_requests_total", "Total requests", ["endpoint"])
+ERRORS_TOTAL = Counter("safesteer_errors_total", "Total request errors", ["endpoint"])
+FALLBACK_TOTAL = Counter(
+    "safesteer_fallback_total", "Total routing fallbacks", ["endpoint"]
+)
+LATENCY_SECONDS = Histogram(
+    "safesteer_latency_seconds", "Request latency in seconds", ["endpoint"]
 )
 
 
@@ -105,18 +118,41 @@ def _get_pipeline():
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    REQUESTS_TOTAL.labels(endpoint="/health").inc()
+    with LATENCY_SECONDS.labels(endpoint="/health").time():
+        return {"status": "ok"}
+
+
+@app.get("/ready")
+async def ready():
+    REQUESTS_TOTAL.labels(endpoint="/ready").inc()
+    with LATENCY_SECONDS.labels(endpoint="/ready").time():
+        try:
+            pipeline = _get_pipeline()
+            slices = pipeline.available_slices()
+            return {"status": "ready", "loaded_slices": len(slices)}
+        except Exception as e:
+            ERRORS_TOTAL.labels(endpoint="/ready").inc()
+            raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.get("/metrics")
+async def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/slices")
 async def available_slices():
     """Return list of (language, category) pairs with loaded vectors."""
-    try:
-        pipeline = _get_pipeline()
-        slices = pipeline.available_slices()
-        return {"slices": [{"language": l, "category": c} for l, c in slices]}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    REQUESTS_TOTAL.labels(endpoint="/slices").inc()
+    with LATENCY_SECONDS.labels(endpoint="/slices").time():
+        try:
+            pipeline = _get_pipeline()
+            slices = pipeline.available_slices()
+            return {"slices": [{"language": l, "category": c} for l, c in slices]}
+        except Exception as e:
+            ERRORS_TOTAL.labels(endpoint="/slices").inc()
+            raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/steer", response_model=SteerResponse)
@@ -125,44 +161,58 @@ async def steer(req: SteerRequest):
     Main endpoint: classify the prompt, generate raw + steered outputs,
     and optionally score both with Azure Content Safety.
     """
-    try:
-        pipeline = _get_pipeline()
-        result = pipeline.run(
-            prompt=req.prompt,
-            force_language=req.language,
-            force_category=req.category,
-            alpha=req.alpha,
-            max_new_tokens=req.max_new_tokens,
-            always_steer=req.always_steer,
-        )
-        return SteerResponse(
-            prompt=result.prompt,
-            detected_language=result.detected_language,
-            detected_category=result.detected_category,
-            risk_score=result.risk_score,
-            steering_applied=result.steering_applied,
-            alpha_used=result.alpha_used,
-            raw_output=result.raw_output,
-            steered_output=result.steered_output,
-            azure_score_raw=result.azure_score_raw,
-            azure_score_steered=result.azure_score_steered,
-            latency_ms=result.latency_ms,
-        )
-    except Exception as e:
-        logger.exception("Error in /steer")
-        raise HTTPException(status_code=500, detail=str(e))
+    REQUESTS_TOTAL.labels(endpoint="/steer").inc()
+    with LATENCY_SECONDS.labels(endpoint="/steer").time():
+        try:
+            pipeline = _get_pipeline()
+            result = pipeline.run(
+                prompt=req.prompt,
+                force_language=req.language,
+                force_category=req.category,
+                alpha=req.alpha,
+                max_new_tokens=req.max_new_tokens,
+                always_steer=req.always_steer,
+            )
+            fallback_used = (
+                result.steering_language_used != result.detected_language
+                or result.steering_category_used != result.detected_category
+            )
+            if fallback_used:
+                FALLBACK_TOTAL.labels(endpoint="/steer").inc()
+            return SteerResponse(
+                prompt=result.prompt,
+                detected_language=result.detected_language,
+                detected_category=result.detected_category,
+                risk_score=result.risk_score,
+                steering_applied=result.steering_applied,
+                alpha_used=result.alpha_used,
+                raw_output=result.raw_output,
+                steered_output=result.steered_output,
+                azure_score_raw=result.azure_score_raw,
+                azure_score_steered=result.azure_score_steered,
+                latency_ms=result.latency_ms,
+            )
+        except Exception as e:
+            ERRORS_TOTAL.labels(endpoint="/steer").inc()
+            logger.exception("Error in /steer")
+            raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/generate", response_model=GenerateResponse)
 async def generate(req: GenerateRequest):
     """Baseline generation without steering."""
-    try:
-        pipeline = _get_pipeline()
-        output = pipeline.engine.generate(req.prompt, max_new_tokens=req.max_new_tokens)
-        return GenerateResponse(prompt=req.prompt, output=output)
-    except Exception as e:
-        logger.exception("Error in /generate")
-        raise HTTPException(status_code=500, detail=str(e))
+    REQUESTS_TOTAL.labels(endpoint="/generate").inc()
+    with LATENCY_SECONDS.labels(endpoint="/generate").time():
+        try:
+            pipeline = _get_pipeline()
+            output = pipeline.engine.generate(
+                req.prompt, max_new_tokens=req.max_new_tokens
+            )
+            return GenerateResponse(prompt=req.prompt, output=output)
+        except Exception as e:
+            ERRORS_TOTAL.labels(endpoint="/generate").inc()
+            logger.exception("Error in /generate")
+            raise HTTPException(status_code=500, detail=str(e))
 
 
 # ─────────────────────────────────────────────────────────────────────────────

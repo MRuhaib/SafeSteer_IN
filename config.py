@@ -13,14 +13,15 @@ load_dotenv()
 
 # ─── Project Paths ───────────────────────────────────────────────────────────
 PROJECT_ROOT = Path(__file__).resolve().parent
-DATA_DIR = PROJECT_ROOT / "data"
+SRC_ROOT = PROJECT_ROOT / "src"
+DATA_DIR = SRC_ROOT / "data"
 DATASET_DIR = DATA_DIR / "datasets"
-VECTORS_DIR = PROJECT_ROOT / "steering_vectors"
-MODELS_DIR = PROJECT_ROOT / "models"
-EVALUATION_DIR = PROJECT_ROOT / "evaluation" / "results"
+VECTORS_DIR = SRC_ROOT / "steering_vectors"
+MODELS_DIR = SRC_ROOT / "models"
+EVALUATION_DIR = SRC_ROOT / "evaluation" / "results"
 LOGS_DIR = PROJECT_ROOT / "logs"
 
-for _d in [DATASET_DIR, VECTORS_DIR, MODELS_DIR, EVALUATION_DIR, LOGS_DIR]:
+for _d in [SRC_ROOT, DATASET_DIR, VECTORS_DIR, MODELS_DIR, EVALUATION_DIR, LOGS_DIR]:
     _d.mkdir(parents=True, exist_ok=True)
 
 # ─── Model Configuration ────────────────────────────────────────────────────

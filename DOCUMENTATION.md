@@ -45,14 +45,14 @@ SafeSteer-IN addresses these challenges through:
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  Data Construction → Vector Extraction → Router Training        │
-│  (scripts/01)         (scripts/02)         (scripts/03)         │
+│  (src/scripts/01)     (src/scripts/02)     (src/scripts/03)     │
 │        ↓                   ↓                   ↓                 │
 │   train.jsonl       vectors/           classifier.pt           │
 │   val.jsonl      metadata.json        label_maps.json          │
 │   test.jsonl                                                    │
 │                                                                  │
 │  Alpha Calibration → Evaluation & Export                        │
-│  (scripts/04)              (scripts/05)                         │
+│  (src/scripts/04)          (src/scripts/05)                     │
 │        ↓                        ↓                               │
 │   calibration.json    steered_exports/                         │
 │                       *.csv, *.json                            │
@@ -133,7 +133,7 @@ HARM_CATEGORIES = {
 }
 ```
 
-### 2. Taxonomy Module (`data/taxonomy.py`)
+### 2. Taxonomy Module (`src/data/taxonomy.py`)
 
 Defines the safety taxonomy with structured metadata for each harm category.
 
@@ -152,7 +152,7 @@ class HarmCategory:
 
 Each category is designed around India-specific contexts that are underrepresented in English-centric safety research.
 
-### 3. Template System (`data/templates.py`)
+### 3. Template System (`src/data/templates.py`)
 
 Hand-crafted seed contrastive templates for each (language, category) combination.
 
@@ -170,7 +170,7 @@ Templates serve as:
 - Quality anchors ensuring culturally appropriate content
 - Coverage guarantees across all language-category combinations
 
-### 4. Synthetic Generation (`data/synthetic_generation.py`)
+### 4. Synthetic Generation (`src/data/synthetic_generation.py`)
 
 Augments seed templates with synthetically generated pairs to increase per-slice coverage.
 
@@ -186,7 +186,7 @@ Augments seed templates with synthetically generated pairs to increase per-slice
    - Generates variant markers ('संक्षेप में', 'step-wise', etc.)
    - Ensures minimum pair count per slice through controlled expansion
 
-### 5. Vector Extraction (`steering/extract_vectors.py`)
+### 5. Vector Extraction (`src/steering/extract_vectors.py`)
 
 Core mechanism for computing steering directions from contrastive pairs.
 
@@ -225,7 +225,7 @@ def extract_vectors_for_slice(model, tokenizer, pairs, target_layers):
 - Reduces sequence dimension via mean-pooling over token positions
 - Returns per-layer aggregated activations
 
-### 6. Forward Hooks (`steering/hooks.py`)
+### 6. Forward Hooks (`src/steering/hooks.py`)
 
 PyTorch implementation of activation capture and steering injection.
 
@@ -261,7 +261,7 @@ output = model.generate(input_ids, max_new_tokens=128)
 hook.remove()  # Clean up after generation
 ```
 
-### 7. Classifier Training (`classifier/train_classifier.py`)
+### 7. Classifier Training (`src/classifier/train_classifier.py`)
 
 Multi-task classification system for runtime prompt routing.
 
@@ -288,7 +288,7 @@ Prediction Prediction
 - Input: Prompt text only (from contrastive dataset)
 - Labels: Language code + harm category index
 
-### 8. Steering Engine (`engine/steering_engine.py`)
+### 8. Steering Engine (`src/engine/steering_engine.py`)
 
 High-level API for vector-based generation with fallback logic.
 
@@ -320,7 +320,7 @@ class SteeringEngine:
 3. If still missing, try Hindi slice for the category
 4. If no vectors available, return unsteered output with warning
 
-### 9. Inference Pipeline (`engine/pipeline.py`)
+### 9. Inference Pipeline (`src/engine/pipeline.py`)
 
 Full orchestration of classification, vector selection, and steering.
 
@@ -354,13 +354,13 @@ else:
 
 ### Stage 1: Dataset Construction
 
-**Entrypoint**: `scripts/01_build_dataset.py` / `data/build_dataset.py`
+**Entrypoint**: `src/scripts/01_build_dataset.py` / `src/data/build_dataset.py`
 
 **Execution Flow**:
 
 ```python
 def build_dataset(augment=True, load_hf=False, min_pairs_per_slice=30):
-    # 1. Load seed templates from data/templates.py
+    # 1. Load seed templates from src/data/templates.py
     seed_pairs = load_seed_templates()
     
     # 2. For each (language, category) combination:
@@ -396,12 +396,12 @@ def build_dataset(augment=True, load_hf=False, min_pairs_per_slice=30):
 
 ### Stage 2: Vector Extraction
 
-**Entrypoint**: `scripts/02_extract_vectors.py` / `steering/extract_vectors.py`
+**Entrypoint**: `src/scripts/02_extract_vectors.py` / `src/steering/extract_vectors.py`
 
 **Execution for Sarvam-1 (9-language)**:
 
 ```bash
-python scripts/02_extract_vectors.py \
+python src/scripts/02_extract_vectors.py \
   --model sarvam-1 \
   --languages hi ta bn gu mr hi-en te kn ml \
   --categories communal_religious_hate caste_discrimination ... \
@@ -445,7 +445,7 @@ steering_vectors/sarvam-1/
 
 ### Stage 3: Classifier Training
 
-**Entrypoint**: `scripts/03_train_classifier.py` / `classifier/train_classifier.py`
+**Entrypoint**: `src/scripts/03_train_classifier.py` / `src/classifier/train_classifier.py`
 
 **Training Configuration**:
 
@@ -472,7 +472,7 @@ train_classifier(
 
 ### Stage 4: Alpha Calibration
 
-**Entrypoint**: `scripts/04_calibrate_alpha.py` / `steering/calibrate_alpha.py`
+**Entrypoint**: `src/scripts/04_calibrate_alpha.py` / `src/steering/calibrate_alpha.py`
 
 **Calibration Objective**:
 
@@ -509,12 +509,12 @@ def calibrate_alpha(model, pairs, vector, layer_idx, alphas=[5,10,15,20,...]):
 
 ### Stage 5: Evaluation and Export
 
-**Entrypoint**: `scripts/05_evaluate.py` / `evaluation/evaluate.py`
+**Entrypoint**: `src/scripts/05_evaluate.py` / `src/evaluation/evaluate.py`
 
 **Export Mode**:
 
 ```bash
-python scripts/05_evaluate.py \
+python src/scripts/05_evaluate.py \
   --model sarvam-1 \
   --test-dir data/datasets/expanded \
   --steered-only \
@@ -671,7 +671,7 @@ return result
 ```bash
 python app.py
 # or
-python scripts/06_launch_demo.py
+python src/scripts/06_launch_demo.py
 ```
 
 **Features**:
@@ -966,10 +966,7 @@ docker run --gpus all -p 8000:8000 safesteer-in
 - Vectors can be pushed to HuggingFace Model Hub for versioning
 - Classifier checkpoint compatible with standard model repo structure
 
-**MLOps Integration**:
-- Vectors and metadata are static artifacts suitable for DVC tracking
-- Classifier checkpoints follow PyTorch conventions for experiment tracking
-- Evaluation outputs (CSV/JSON) are tabular for metrics dashboards
+
 
 ---
 
