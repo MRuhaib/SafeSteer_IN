@@ -1,0 +1,58 @@
+{
+  "model": "sarvam-1",
+  "language": "ta",
+  "category": "child_safety",
+  "layers": {
+    "8": {
+      "file": "layer8.pt",
+      "norm": 0.99951171875,
+      "shape": [
+        2048
+      ]
+    },
+    "10": {
+      "file": "layer10.pt",
+      "norm": 1.0,
+      "shape": [
+        2048
+      ]
+    },
+    "12": {
+      "file": "layer12.pt",
+      "norm": 1.0,
+      "shape": [
+        2048
+      ]
+    },
+    "14": {
+      "file": "layer14.pt",
+      "norm": 1.0,
+      "shape": [
+        2048
+      ]
+    },
+    "16": {
+      "file": "layer16.pt",
+      "norm": 0.99951171875,
+      "shape": [
+        2048
+      ]
+    },
+    "18": {
+      "file": "layer18.pt",
+      "norm": 1.0,
+      "shape": [
+        2048
+      ]
+    }
+  },
+  "num_pairs": 23,
+  "target_layers": [
+    8,
+    10,
+    12,
+    14,
+    16,
+    18
+  ]
+}

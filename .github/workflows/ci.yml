@@ -21,7 +21,7 @@ jobs:
       - name: Install lightweight test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install fastapi uvicorn pydantic prometheus_client pytest dvc
+          pip install fastapi uvicorn pydantic prometheus_client pytest dvc httpx
 
       - name: Validate DVC DAG
         run: dvc dag

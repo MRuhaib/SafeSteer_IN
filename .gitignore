@@ -21,16 +21,9 @@ venv/
 # Data & Model Artifacts (tracked via DVC, not git)
 # -------------------------------------------------------
 
-# Steering vectors (large .pt binary files, versioned by DVC)
-steering_vectors/
-src/steering_vectors/
-
 # PyTorch binaries anywhere in the tree
 *.pt
 *.pth
-
-# Generated datasets (re-created by Stage 1)
-src/data/datasets/
 
 # Trained model checkpoints (re-created by Stage 3)
 models/
