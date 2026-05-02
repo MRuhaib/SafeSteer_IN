@@ -21,9 +21,6 @@ venv/
 # Data & Model Artifacts (tracked via DVC, not git)
 # -------------------------------------------------------
 
-# PyTorch binaries anywhere in the tree
-*.pt
-*.pth
 
 # Trained model checkpoints (re-created by Stage 3)
 models/
