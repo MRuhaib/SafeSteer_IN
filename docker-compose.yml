@@ -16,7 +16,7 @@ services:
       - ./mlruns:/app/mlruns
       - ./logs:/app/logs
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/ready || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1"]
       interval: 20s
       timeout: 10s
       retries: 3
@@ -73,8 +73,28 @@ services:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
     depends_on:
+      alertmanager:
+        condition: service_started
       api:
         condition: service_healthy
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: safesteer-alertmanager
+    ports:
+      - "9093:9093"
+    environment:
+      - SMTP_SMARTHOST=${SMTP_SMARTHOST:-smtp.gmail.com:587}
+      - SMTP_FROM=${SMTP_FROM:-alerts@example.com}
+      - SMTP_AUTH_USERNAME=${SMTP_AUTH_USERNAME:-}
+      - SMTP_AUTH_PASSWORD=${SMTP_AUTH_PASSWORD:-}
+      - ALERT_TO=${ALERT_TO:-evaluator@example.com}
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --config.expand-env
     restart: unless-stopped
 
   grafana:

@@ -60,6 +60,8 @@ desktop.ini
 .ipynb_checkpoints/
 phi_baseline_eval.ipynb
 safesteer_in.ipynb
+kaggle_pipeline.ipynb
+kaggle_pipeline.py
 
 # -------------------------------------------------------
 # Local-only project files (not for submission)

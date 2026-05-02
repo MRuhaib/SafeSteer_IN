@@ -157,6 +157,21 @@ MODEL_CONFIGS = {
     },
 }
 
+# -- Backward-compatible key aliases ------------------------------------------
+_MODEL_ALIASES = {
+    "openhathi":        "openhathi-base",
+    "openhathi-7b":     "openhathi-base",
+    "phi-3":            "phi-3-mini-4k-instruct",
+    "phi3":             "phi-3-mini-4k-instruct",
+    "phi-4":            "phi-4-mini-instruct",
+    "phi4":             "phi-4-mini-instruct",
+    "krutrim":          "krutrim-2-instruct",
+    "krutrim-2":        "krutrim-2-instruct",
+    "sarvam-m-24b":     "sarvam-m",
+}
+for _alias, _target in _MODEL_ALIASES.items():
+    MODEL_CONFIGS[_alias] = MODEL_CONFIGS[_target]
+
 ACTIVE_MODEL = os.getenv("SAFESTEER_MODEL", "sarvam-1")
 
 

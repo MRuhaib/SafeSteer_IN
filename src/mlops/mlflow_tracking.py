@@ -21,7 +21,7 @@ from typing import Dict, List, Optional, Any
 try:
     import mlflow
     from mlflow.tracking import MlflowClient
-except ImportError:
+except Exception:
     mlflow = None
     MlflowClient = None
 
